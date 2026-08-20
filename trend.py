@@ -142,14 +142,17 @@ def count_mentions(
     mentions: dict[tuple[str, str], int] = defaultdict(int)
     channels: dict[tuple[str, str], set[str]] = defaultdict(set)
     documents: dict[str, int] = defaultdict(int)
+    # 중복 제거 전 언급 수. evidence_strength의 '비중복 비율' 항이 이 값을 쓴다.
+    raw: dict[tuple[str, str], int] = defaultdict(int)
 
     if source == "video":
         for meta in videos.values():
             documents[meta["quarter"]] += 1
             for topic in meta["topics"]:
                 mentions[(topic, meta["quarter"])] += 1
+                raw[(topic, meta["quarter"])] += 1
                 channels[(topic, meta["quarter"])].add(meta["channel_id"])
-        return mentions, channels, documents
+        return mentions, channels, documents, raw
 
     # 같은 영상 안에서 정규화 후 동일한 댓글은 한 번만 센다. 복붙 스팸과
     # `❤`·`감사합니다` 류가 언급량을 부풀리는 것을 막는다(실측 2,395건 = 1.1%).
@@ -164,15 +167,20 @@ def count_mentions(
             if not meta:
                 continue
             text = normalize_text(row.get("text"))
+            if not text:
+                continue
+            topics = match_topics(text)
+            for topic in topics:                      # 중복 포함 — 비중복 비율의 분모
+                raw[(topic, meta["quarter"])] += 1
             key = (row["video_id"], text)
-            if not text or key in seen:
+            if key in seen:
                 continue
             seen.add(key)
             documents[meta["quarter"]] += 1
-            for topic in match_topics(text):
+            for topic in topics:
                 mentions[(topic, meta["quarter"])] += 1
                 channels[(topic, meta["quarter"])].add(meta["channel_id"])
-    return mentions, channels, documents
+    return mentions, channels, documents, raw
 
 
 def entropy(counts: list[int]) -> float:
@@ -187,7 +195,7 @@ def entropy(counts: list[int]) -> float:
 
 def build_rows(run_dirs: list[Path], panel: dict[str, str], source: str) -> list[dict[str, Any]]:
     videos = load_videos(run_dirs, panel)
-    mentions, channels, documents = count_mentions(run_dirs, videos, source)
+    mentions, channels, documents, raw = count_mentions(run_dirs, videos, source)
     quarters = sorted(documents)
     panel_channels = {q: set() for q in quarters}
     for meta in videos.values():
@@ -233,6 +241,15 @@ def build_rows(run_dirs: list[Path], panel: dict[str, str], source: str) -> list
                     "velocity_yoy": round(velocity, 4) if velocity is not None else None,
                     "persistence": round(
                         sum(1 for w in window if composition[(topic, w)] > baseline[topic]) / len(window), 3
+                    ),
+                    # 판정 규칙(TEAM_DECISIONS §3.2)은 개수 단위로 쓰여 있다. 비율만 두면
+                    # 창이 짧은 초기 분기에서 개수를 복원할 수 없으므로 둘 다 남긴다.
+                    "persistence_count": sum(
+                        1 for w in window if composition[(topic, w)] > baseline[topic]
+                    ),
+                    "window_quarters": len(window),
+                    "unique_ratio": round(
+                        doc_count / raw[(topic, q)] if raw[(topic, q)] else 1.0, 4
                     ),
                     "channel_count": len(channels[(topic, q)]),
                     "panel_channels": len(panel_channels[q]),
