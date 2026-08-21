@@ -28,6 +28,19 @@ from pathlib import Path
 from typing import Any
 
 TAU = 0.35
+
+# 채널 확산 임계값. 전년 동분기 대비 channel_diffusion 이 이만큼은 올라야 확산으로 본다.
+#
+# 처음에는 "0보다 크면 상승"으로 뒀는데 판정된 89셀 중 52셀(58%)이 여기로 쏠렸다.
+# 아무리 작은 증가도 참이 되기 때문이다. 유형이 한 곳에 몰리면 분류의 정보량이 없다.
+#
+# 값은 tau 와 같은 방법으로 뽑았다 — 관측된 전년 동분기 대비 변화량 234셀의
+# 절대값 75분위가 0.089 다(중앙 0.042 · 90분위 0.496). 이 컷에서 52셀이 14셀로
+# 줄고, 남는 것은 +0.10 ~ +0.54 의 실제 도약이다.
+#
+# tau 와 마찬가지로 **소스마다 다시 뽑아야 한다.** NAVER·커머스가 붙으면 그 소스의
+# 분포에서 새로 뽑고, 적용한 값을 결과 파일에 남긴다. 지금은 유튜브 실측값이다.
+DIFFUSION_TAU = 0.089
 MIN_DOCUMENT_COUNT = 5
 NEW_TOPIC_MAX_SHARE = 0.01      # 신규 등장: 직전 3분기 구성비가 모두 이 미만
 EVIDENCE_FLOOR = 50.0           # 근거 부족 컷
@@ -39,7 +52,7 @@ OUT_FIELDS = [
     "quarter", "topic_id", "source", "document_count", "composition",
     "velocity_yoy", "persistence", "persistence_count", "channel_diffusion",
     "unique_ratio", "evidence_strength", "opportunity_score", "trend_type",
-    "gap_pp", "hold_reason", "single_source", "judged", "tau", "metric_version",
+    "gap_pp", "hold_reason", "single_source", "judged", "tau", "diffusion_tau", "metric_version",
 ]
 
 
@@ -108,7 +121,8 @@ def classify(row: dict[str, Any], history: dict[str, dict[str, Any]],
 
     prev_year = f"{int(row['quarter'][:4]) - 1}Q{row['quarter'][5]}"
     prev = history.get(prev_year)
-    if prev and row["channel_diffusion"] > prev["channel_diffusion"] and velocity <= TAU:
+    if (prev and row["channel_diffusion"] - prev["channel_diffusion"] > DIFFUSION_TAU
+            and velocity <= TAU):
         return "채널 확산"
 
     if abs(velocity) <= TAU and persistence_count >= 3:
@@ -160,7 +174,7 @@ def judge(rows: list[dict[str, str]]) -> tuple[list[dict[str, Any]], dict[str, A
             "metric_version": raw["metric_version"],
         })
 
-    notes: dict[str, Any] = {"tau": TAU, "sources": {}}
+    notes: dict[str, Any] = {"tau": TAU, "diffusion_tau": DIFFUSION_TAU, "sources": {}}
     out: list[dict[str, Any]] = []
 
     for source, cells in by_source.items():
@@ -237,6 +251,7 @@ def judge(rows: list[dict[str, str]]) -> tuple[list[dict[str, Any]], dict[str, A
         cell["judged"] = "true" if cell["trend_type"] not in (
             "근거 부족", "판정 보류", "미확정(진행 중)") else "false"
         cell["tau"] = TAU
+        cell["diffusion_tau"] = DIFFUSION_TAU
 
     out.sort(key=lambda c: (c["source"], c["topic_id"], c["quarter"]))
     return out, notes
@@ -299,6 +314,12 @@ def demo() -> None:
     q2 = ["2023Q4"] + quarters
     assert classify(cell("2024Q4", velocity_yoy=0.1, channel_diffusion=0.9,
                          persistence_count=1), hist_dif, q2, False) == "채널 확산"
+    # 임계값 미만의 미세한 증가는 확산으로 보지 않는다.
+    # 이 검사가 없으면 아무리 작은 증가도 참이 되어 판정이 한 유형으로 쏠린다.
+    hist_small = dict(hist)
+    hist_small["2023Q4"] = cell("2023Q4", channel_diffusion=0.50 - DIFFUSION_TAU / 2)
+    assert classify(cell("2024Q4", velocity_yoy=0.1, channel_diffusion=0.50,
+                         persistence_count=1), hist_small, q2, False) != "채널 확산"
     # 사라짐: 최고 분기의 절반 미만
     hist_fall = {q: cell(q, composition=0.20) for q in quarters}
     hist_fall["2024Q4"] = cell("2024Q4", composition=0.05, velocity_yoy=-0.9)
@@ -335,7 +356,7 @@ def main() -> int:
     counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     for row in rows:
         counts[row["source"]][row["trend_type"]] += 1
-    print(f"{args.out} : {len(rows)}행  (tau={TAU})")
+    print(f"{args.out} : {len(rows)}행  (tau={TAU}, diffusion_tau={DIFFUSION_TAU})")
     for source, tally in counts.items():
         info = notes["sources"][source]
         print(f"\n[{source}] 셀 {info['cells']}개, 근거 수 척도={info['document_count_scale']}, "
