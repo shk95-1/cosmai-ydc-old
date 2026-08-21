@@ -1,0 +1,309 @@
+#!/usr/bin/env python3
+"""BM25 어휘 검색. RAG 검색 계층의 절반이고, 벡터 쪽의 기준선이다.
+
+왜 어휘 검색이 필요한가. 벡터는 "뜻이 가까운 것"을 찾고 어휘는 "글자가 같은 것"을
+찾는다. 우리 데이터에는 정확히 일치해야만 의미가 있는 말이 많다 —
+`에칠헥실트리아존`, `SPF50+`, 브랜드명. 벡터에 넣으면 `에칠헥실메톡시신나메이트`
+와 비슷하다고 나온다. 성분이 다른데 비슷하다고 하면 그건 틀린 답이다.
+
+반대로 `하얗게 떠서 싫다` 는 어휘로는 못 찾는다. `백탁` 이라는 글자가 없다.
+그래서 둘을 같이 쓰고 순위를 합친다(RRF). 이 파일은 어휘 쪽이다.
+
+**벡터보다 이걸 먼저 만든 이유.** 임베딩 모델을 뭘로 정하든 이 기준선은 안 바뀐다.
+기준선 없이 하이브리드를 만들면 "합친 게 더 낫다"를 확인할 방법이 없다.
+어제 후향 검증에서 기저율을 같이 낸 것과 같은 이유다.
+
+BM25 는 학습이 없다. 규칙 세 개다.
+  1. 그 단어가 문서에 몇 번 나오나 (tf) — 많으면 관련 있다. 단 포화시킨다
+  2. 그 단어가 전체 문서 몇 개에 나오나 (idf) — 흔하면 깎는다
+  3. 문서가 얼마나 긴가 — 긴 문서는 아무 단어나 들어 있으니 보정한다
+
+2번이 핵심이고, 어제 `unmatched_terms.py` 에서 lift 로 일반어를 깎은 것과 같은 발상이다.
+
+토큰화는 언어로 갈린다. 한국어는 Kiwi 형태소(사용자 사전 필수), 그 외는 공백·소문자.
+논문 데이터가 영어로 들어올 수 있어 자리를 미리 둔다. 토큰화가 소스마다 갈리면
+점수를 비교할 수 없으므로 **언어 판정은 텍스트로만** 하고 소스로 하지 않는다.
+
+입력은 `common/document.csv` 다. `source` 를 하드코딩하지 않으므로 커머스·논문·NAVER
+가 같은 스키마로 변환되면 행이 늘어나는 것뿐이고 이 파일은 안 바뀐다.
+
+사용법:
+    python bm25.py --query "하얗게 떠서 싫다"
+    python bm25.py --query "에칠헥실트리아존" --top 5
+"""
+from __future__ import annotations
+
+import argparse
+import csv
+import hashlib
+import math
+import pickle
+import re
+import unicodedata
+from collections import Counter, defaultdict
+from pathlib import Path
+
+csv.field_size_limit(10 ** 8)
+
+K1 = 1.2      # tf 포화 계수. 표준값. 우리 데이터로 다시 뽑을 이유가 아직 없다
+B = 0.75      # 길이 보정 강도. 표준값
+# SPF50+ 를 한 토큰으로. 뒤에 아무것도 없는 `+` 도 살려야 한다 — `SPF50+` 가
+# `spf` + `50` 으로 갈리면 차단지수 검색이 전부 어긋난다.
+LATIN_RE = re.compile(r"[a-z0-9]+(?:[+\-][a-z0-9]+)*\+?")
+HANGUL_RE = re.compile(r"[가-힣]")
+
+# 내용어만 남긴다. 조사·어미·기호는 순위에 잡음만 넣는다.
+# VA·VV 를 넣는 이유 — `끈적이다`·`시리다` 처럼 서술어가 주제인 경우가 많다.
+# SL(외국어)·SN(숫자)은 **일부러 뺐다.** 라틴 토큰은 정규식이 담당한다. 둘 다 넣으면
+# 같은 단어가 두 번 세어져 tf 가 부풀고, 한국어 문서에서만 영어 단어가 유리해진다.
+#
+# 태그는 `VA-I`·`VV-R` 처럼 불규칙 표시가 붙어 오므로 하이픈 앞만 본다. 이걸 놓쳐서
+# `하얗게 떠서 싫다` 의 질의 토큰이 0개로 나왔다.
+KIWI_TAGS = {"NNG", "NNP", "VA", "VV", "XR", "MAG"}
+
+# 한 글자 명사는 잡음이다(거·것·수·때). 반면 **서술어 어간은 한 글자가 정상**이다 —
+# `하얗`·`뜨`·`싫`·`시리`. 명사에만 길이 조건을 걸어야 한다.
+NOUN_TAGS = {"NNG", "NNP"}
+
+_kiwi = None
+
+
+def kiwi(dictionary: Path = Path("seeds/user_dictionary.tsv")):
+    """Kiwi 를 한 번만 만든다. 사용자 사전 없이 쓰면 백탁이 백+탁 으로 쪼개진다."""
+    global _kiwi
+    if _kiwi is None:
+        from kiwipiepy import Kiwi
+        _kiwi = Kiwi()
+        if dictionary.exists():
+            _kiwi.load_user_dictionary(str(dictionary))
+        else:
+            print(f"[경고] 사용자 사전이 없다: {dictionary}")
+    return _kiwi
+
+
+def is_korean(text: str) -> bool:
+    """한글이 5% 넘으면 한국어로 본다. 영어 논문에 한글 각주가 있어도 안 흔들린다."""
+    if not text:
+        return False
+    return len(HANGUL_RE.findall(text)) / len(text) > 0.05
+
+
+def tokenize(text: str) -> list[str]:
+    """언어로 갈린다. 두 갈래 모두 소문자 NFKC 를 거쳐 같은 표면형을 만든다."""
+    text = unicodedata.normalize("NFKC", text or "")
+    if not is_korean(text):
+        # 영어·숫자 전용. 논문이 영어로 오면 이쪽을 탄다
+        return LATIN_RE.findall(text.lower())
+    out = []
+    for token in kiwi().tokenize(text):
+        tag = token.tag.split("-")[0]          # VA-I -> VA
+        if tag not in KIWI_TAGS:
+            continue
+        if tag in NOUN_TAGS and len(token.form) < 2:
+            continue
+        out.append(token.form.lower())
+    # 한국어 문서 안의 라틴 토큰(SPF50+, Tinosorb)은 정규식이 담당한다.
+    # Kiwi 는 기호가 붙으면 쪼개므로 `SPF50+` 를 한 덩어리로 못 준다.
+    out.extend(t for t in LATIN_RE.findall(text.lower()) if len(t) >= 2)
+    return out
+
+
+class Index:
+    """역색인 하나. 문서 수가 10만 규모라 메모리에 그냥 둔다."""
+
+    def __init__(self, doc_ids: list[str], texts: list[str]):
+        if len(doc_ids) != len(texts):
+            raise ValueError("doc_ids 와 texts 길이가 다르다")
+        self.doc_ids = doc_ids
+        self.postings: dict[str, list[tuple[int, int]]] = defaultdict(list)
+        self.lengths: list[int] = []
+        for i, text in enumerate(texts):
+            tokens = tokenize(text)
+            self.lengths.append(len(tokens))
+            for term, tf in Counter(tokens).items():
+                self.postings[term].append((i, tf))
+        self.n = len(doc_ids)
+        self.avg_len = (sum(self.lengths) / self.n) if self.n else 0.0
+        self.position = {doc_id: i for i, doc_id in enumerate(doc_ids)}
+
+    def state(self) -> dict:
+        """캐시에 담을 알맹이. 클래스가 아니라 dict 로 오간다."""
+        return {"doc_ids": self.doc_ids, "postings": dict(self.postings),
+                "lengths": self.lengths}
+
+    @classmethod
+    def from_state(cls, state: dict) -> "Index":
+        index = cls.__new__(cls)
+        index.doc_ids = state["doc_ids"]
+        index.postings = state["postings"]
+        index.lengths = state["lengths"]
+        index.n = len(index.doc_ids)
+        index.avg_len = (sum(index.lengths) / index.n) if index.n else 0.0
+        index.position = {d: i for i, d in enumerate(index.doc_ids)}
+        return index
+
+    def idf(self, term: str) -> float:
+        """Robertson–Sparck Jones. 절반 넘는 문서에 나오면 음수가 되므로 0 에서 막는다."""
+        df = len(self.postings.get(term, ()))
+        if df == 0:
+            return 0.0
+        return max(0.0, math.log((self.n - df + 0.5) / (df + 0.5) + 1.0))
+
+    def search(self, query: str, k: int = 10,
+               skip: set[str] | None = None) -> list[tuple[str, float]]:
+        """상위 k 개 (doc_id, 점수). skip 은 후보에서 제외할 doc_id 집합이다.
+
+        skip 이 필요한 이유는 평가다. 별칭 하나를 질의로 주고 **그 별칭이 글자로
+        들어 있는 문서를 후보에서 빼면**, 글자가 겹치지 않는 같은 주제 문서를
+        찾아낼 수 있는지 잴 수 있다. 벡터가 이겨야 하는 판이 정확히 이것이다.
+        """
+        banned = {self.position[d] for d in (skip or ()) if d in self.position}
+        scores: dict[int, float] = defaultdict(float)
+        for term in set(tokenize(query)):
+            weight = self.idf(term)
+            if weight == 0.0:
+                continue
+            for i, tf in self.postings[term]:
+                if i in banned:
+                    continue
+                norm = tf + K1 * (1 - B + B * self.lengths[i] / (self.avg_len or 1))
+                scores[i] += weight * tf * (K1 + 1) / norm
+        ranked = sorted(scores.items(), key=lambda kv: (-kv[1], self.doc_ids[kv[0]]))
+        return [(self.doc_ids[i], round(s, 4)) for i, s in ranked[:k]]
+
+
+def load_documents(common: Path, sources: list[str] | None = None
+                   ) -> tuple[list[str], list[str], dict[str, str]]:
+    """(doc_ids, texts, doc_id -> source). quality_flags 가 붙은 행은 뺀다.
+
+    `source` 로 필터할 수 있게만 두고 기본은 전부다. 커머스·논문이 붙으면
+    같은 파일에 행이 늘어난다.
+    """
+    doc_ids, texts, origin = [], [], {}
+    with (common / "document.csv").open(encoding="utf-8-sig", newline="") as handle:
+        for row in csv.DictReader(handle):
+            if row["quality_flags"]:
+                continue
+            if sources and row["source"] not in sources:
+                continue
+            doc_ids.append(row["doc_id"])
+            texts.append(row["text"])
+            origin[row["doc_id"]] = row["source"]
+    return doc_ids, texts, origin
+
+
+def build(common: Path, sources: list[str] | None = None,
+          cache: Path | None = Path(".cache/bm25")) -> tuple[Index, dict[str, str]]:
+    """색인을 만들거나 캐시에서 읽는다.
+
+    26만 문서를 Kiwi 로 훑는 데 4분 30초 걸린다. 평가는 색인 하나로 질의를 수십 개
+    돌리는 일이므로 매번 다시 만들면 실험을 못 한다. 입력 파일과 토큰화 규칙의
+    해시를 키로 두어, **규칙을 고치면 캐시가 자동으로 무효**가 되게 한다.
+    """
+    if cache is None:
+        doc_ids, texts, origin = load_documents(common, sources)
+        return Index(doc_ids, texts), origin
+
+    source_csv = common / "document.csv"
+    stamp = hashlib.sha256(
+        f"{source_csv.stat().st_size}:{source_csv.stat().st_mtime_ns}"
+        f":{sorted(sources or [])}"
+        # 토큰화 규칙이 바뀌면 캐시를 버려야 한다. 안 그러면 옛 토큰으로 평가한다
+        f":{sorted(KIWI_TAGS)}:{sorted(NOUN_TAGS)}:{LATIN_RE.pattern}:{K1}:{B}"
+        .encode()).hexdigest()[:16]
+    path = cache / f"index-{stamp}.pkl"
+    if path.exists():
+        with path.open("rb") as handle:
+            state = pickle.load(handle)
+        return Index.from_state(state), state["origin"]
+
+    doc_ids, texts, origin = load_documents(common, sources)
+    index = Index(doc_ids, texts)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("wb") as handle:
+        # 클래스 인스턴스를 그대로 절이면 안 된다. bm25.py 를 직접 실행해 만든
+        # 캐시는 `__main__.Index` 로 기록되고, import 해서 읽을 때 못 찾는다.
+        # 평소 dict 만 담는다.
+        pickle.dump({**index.state(), "origin": origin}, handle,
+                    protocol=pickle.HIGHEST_PROTOCOL)
+    return index, origin
+
+
+def demo() -> None:
+    # 언어 판정
+    assert is_korean("백탁이 심해요") and not is_korean("photostability of avobenzone")
+    assert not is_korean("")
+    assert is_korean("SPF 측정 in vitro 결과")          # 한글 섞이면 한국어
+    # 라틴 토큰은 기호를 살린다 — SPF50+ 가 SPF / 50 으로 갈리면 검색이 안 된다
+    assert "spf50+" in tokenize("SPF50+ 제품")
+    assert "tinosorb" in tokenize("Tinosorb S 함유")
+    # 같은 라틴 단어가 두 번 세어지면 tf 가 부푼다 (Kiwi SL + 정규식 중복)
+    assert tokenize("Tinosorb 함유").count("tinosorb") == 1
+    # 한 글자 라틴은 버린다 — `S`, `A` 가 상위에 올라온다
+    assert "s" not in tokenize("Tinosorb S 함유")
+    # 사용자 사전 확인. 이게 깨지면 검색 전체가 조용히 망가진다
+    assert "백탁" in tokenize("백탁 없이 촉촉해요"), tokenize("백탁 없이 촉촉해요")
+    # 조사·어미는 빠져야 한다
+    assert "이" not in tokenize("백탁이 심해요")
+    # 서술어 어간은 한 글자여도 살려야 한다. 이걸 버려서 질의 토큰이 0개가 됐다
+    assert tokenize("하얗게 떠서 싫다"), "형용사·동사만 있는 질의가 비면 검색이 안 된다"
+    assert "하얗" in tokenize("하얗게 떠서 싫다")
+    assert "시리" in tokenize("눈이 시려요")
+    assert "끈적이" in tokenize("끈적여서 별로")
+    # 한 글자 명사는 여전히 버린다
+    assert "것" not in tokenize("이런 것 좋아요")
+
+    index = Index(
+        ["a", "b", "c"],
+        ["백탁 없이 촉촉하다", "끈적임이 심하다 유분감", "백탁 백탁 백탁 하얗게 뜬다"],
+    )
+    top = index.search("백탁", k=3)
+    assert top[0][0] == "c", top          # 세 번 나온 문서가 먼저
+    assert [d for d, _ in top] == ["c", "a"], top
+    # 흔한 말은 idf 가 0 이라 점수를 못 만든다 — 세 문서 중 하나에만 있어야 걸린다
+    assert index.search("없다", k=3) == []
+    # skip 은 후보에서 빼는 것이다
+    assert index.search("백탁", k=3, skip={"c"})[0][0] == "a"
+    assert index.search("백탁", k=3, skip={"a", "c"}) == []
+    # 없는 말은 빈 결과. 예외를 던지면 평가 루프가 멈춘다
+    assert index.search("존재하지않는성분명", k=3) == []
+    # 캐시 왕복. dict 로 오가지 않으면 __main__.Index 로 절여져 import 시 못 읽는다
+    same = Index.from_state(index.state())
+    assert same.search("백탁", k=3) == index.search("백탁", k=3)
+    assert abs(same.avg_len - index.avg_len) < 1e-9 and same.n == index.n
+    print("demo ok")
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(description=__doc__,
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--common", type=Path, default=Path("common"))
+    p.add_argument("--query")
+    p.add_argument("--source", action="append",
+                   help="youtube_video / youtube_comment 등. 여러 번 쓸 수 있다")
+    p.add_argument("--top", type=int, default=10)
+    p.add_argument("--cache", default=".cache/bm25")
+    p.add_argument("--no-cache", action="store_true")
+    p.add_argument("--demo", action="store_true")
+    a = p.parse_args()
+    if a.demo:
+        demo()
+        return 0
+    if not a.query:
+        p.error("--query 를 주거나 --demo 를 쓴다")
+
+    index, origin = build(a.common, a.source,
+                          None if a.no_cache else Path(a.cache))
+    print(f"색인 {index.n:,}개 문서 · 고유 토큰 {len(index.postings):,} · "
+          f"평균 길이 {index.avg_len:.1f}")
+    print(f"질의 토큰: {sorted(set(tokenize(a.query)))}")
+    print()
+    texts = dict(zip(*load_documents(a.common, a.source)[:2]))
+    for rank, (doc_id, score) in enumerate(index.search(a.query, a.top), 1):
+        snippet = texts[doc_id][:110].replace("\n", " ")
+        print(f"{rank:>2}. {score:>8.3f}  {origin[doc_id]:<16}{snippet}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

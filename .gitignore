@@ -35,3 +35,5 @@ reports/reproducibility.json
 # 수집 run 은 올리지 않지만(용량·원문), 팀원이 파일로 준 원천은 리포에 둔다.
 # 카톡 폴더를 정본으로 두면 파일이 사라지는 순간 재현이 끊긴다 — 실제로 한 번 끊겼다.
 !data/external/
+.cache/
+reports/retrieval_eval_*.csv
