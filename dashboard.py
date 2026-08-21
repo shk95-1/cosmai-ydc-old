@@ -24,6 +24,10 @@ import argparse
 import csv
 import html
 import json
+import re
+import shutil
+import subprocess
+import tempfile
 from collections import defaultdict
 from pathlib import Path
 
@@ -107,7 +111,33 @@ def build(judgement: Path, evidence: Path, gain: Path, commerce: Path,
     }
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(render(data), encoding="utf-8")
+    check_script(out)
     return meta
+
+
+def check_script(page: Path) -> None:
+    """생성한 JS 가 파싱되는지 확인한다.
+
+    이 화면은 전부 자바스크립트가 그린다. 문법이 깨지면 페이지가 조용히 빈 화면이 되고,
+    HTML 안에 문자열이 들어 있는지 grep 으로 확인해도 통과한다. 실제로 한 번 그렇게
+    깨진 걸 모르고 배포했다. 그래서 만들 때마다 검사한다.
+    """
+    node = shutil.which("node")
+    if not node:
+        print("[경고] node 가 없어 JS 문법을 검사하지 못했다. 브라우저에서 직접 확인할 것")
+        return
+    body = re.search(r"<script>(.*?)</script>", page.read_text(encoding="utf-8"), re.S)
+    if not body:
+        raise SystemExit("생성한 페이지에 <script> 가 없다")
+    with tempfile.NamedTemporaryFile("w", suffix=".js", encoding="utf-8", delete=False) as fh:
+        fh.write(body.group(1))
+        tmp = fh.name
+    result = subprocess.run([node, "--check", tmp], capture_output=True, text=True)
+    Path(tmp).unlink(missing_ok=True)
+    if result.returncode != 0:
+        raise SystemExit("생성한 JS 가 문법 오류다. 화면이 빈 채로 나온다:\n"
+                         + (result.stderr or result.stdout))
+    print("JS 문법 검사 통과")
 
 
 def render(d: dict) -> str:
@@ -305,7 +335,7 @@ function verify() {{
   }}
   if (D.gain.length) {{
     const rows = D.gain.filter(r => +r.gained > 0);
-    h += '<h2 style='margin-top:22px'>검증 2 · 자막을 넣으면 얼마나 더 보이나</h2>'
+    h += '<h2 style="margin-top:22px">검증 2 · 자막을 넣으면 얼마나 더 보이나</h2>'
       + '<p>표본 측정입니다. 판정에는 반영하지 않았습니다. 자막은 공식 API 가 주지 않아'
       + ' 자료원 성격이 달라, 한계를 재는 용도로만 씁니다.</p>'
       + '<table class="vt"><tr><th>구분</th><th>주제</th><th>설명란만</th>'
