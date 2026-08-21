@@ -30,3 +30,5 @@ reports/opportunity_cards.json
 reports/ingredient_normalized.csv
 reports/unmatched_terms.csv
 reports/spam_ad_sensitivity.csv
+reports/backtest.csv
+reports/reproducibility.json

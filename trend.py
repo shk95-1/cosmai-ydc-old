@@ -56,6 +56,9 @@ TREND_TOPICS = [t["topic"] for t in TOPICS if t["trend_use"]]
 # 같은 계산을 두 번 돌린다. 계산을 두 벌 만들면 결과가 갈라지므로 훅만 둔다.
 EXCLUDE_VIDEOS: set[str] = set()
 EXCLUDE_COMMENTS: set[tuple[str, str]] = set()
+
+# 후향 검증용 훅. 이 분기 이후를 없는 것처럼 계산한다. `backtest.py` 가 채운다.
+CUTOFF_QUARTER: str | None = None
 SUNSCREEN_TERMS = [k.lower() for k in next(t for t in TOPICS if t["topic"] == "선크림")["ko"]]
 
 
@@ -166,6 +169,10 @@ def count_mentions(
     # `❤`·`감사합니다` 류가 언급량을 부풀리는 것을 막는다(실측 2,395건 = 1.1%).
     # 영상 간 중복은 제거하지 않는다 — 다른 영상에 달린 같은 말은 각각 실제 반응이다.
     seen: set[tuple[str, str]] = set()
+    # 같은 댓글이 두 run 에 있으면 한 번만 센다. run 을 겹치지 않게 수집했으므로
+    # 지금은 걸리는 것이 없지만, 실수로 같은 run 을 두 번 넘기면 `raw` 만 두 배가
+    # 되어 unique_ratio 가 절반으로 떨어진다(reproduce.py 3번 검사가 이걸 잡았다).
+    seen_ids: set[str] = set()
     for run_dir in run_dirs:
         path = run_dir / "processed" / "comments.csv"
         if not path.exists():
@@ -174,6 +181,9 @@ def count_mentions(
             meta = videos.get(row["video_id"])
             if not meta:
                 continue
+            if row["comment_id"] in seen_ids:
+                continue
+            seen_ids.add(row["comment_id"])
             text = normalize_text(row.get("text"))
             if not text:
                 continue
@@ -207,9 +217,14 @@ def build_rows(run_dirs: list[Path], panel: dict[str, str], source: str) -> list
     videos = load_videos(run_dirs, panel)
     mentions, channels, documents, raw = count_mentions(run_dirs, videos, source)
     quarters = sorted(documents)
+    if CUTOFF_QUARTER:
+        # 후향 검증용. 이 분기까지만 알고 있었던 것처럼 계산한다. persistence 의
+        # baseline 이 전체 기간 중앙값이라 자르지 않으면 미래를 보고 판정한다.
+        quarters = [q for q in quarters if q <= CUTOFF_QUARTER]
     panel_channels = {q: set() for q in quarters}
     for meta in videos.values():
-        panel_channels[meta["quarter"]].add(meta["channel_id"])
+        if meta["quarter"] in panel_channels:
+            panel_channels[meta["quarter"]].add(meta["channel_id"])
 
     # 주제별 채널 분포는 엔트로피용. 영상 단위로만 세면 되므로 source와 무관하다.
     per_channel: dict[tuple[str, str], dict[str, int]] = defaultdict(lambda: defaultdict(int))
