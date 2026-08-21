@@ -43,6 +43,8 @@ import unicodedata
 from collections import Counter, defaultdict
 from pathlib import Path
 
+from topics import TOPICS
+
 csv.field_size_limit(10 ** 8)
 
 K1 = 1.2      # tf 포화 계수. 표준값. 우리 데이터로 다시 뽑을 이유가 아직 없다
@@ -65,7 +67,59 @@ KIWI_TAGS = {"NNG", "NNP", "VA", "VV", "XR", "MAG"}
 # `하얗`·`뜨`·`싫`·`시리`. 명사에만 길이 조건을 걸어야 한다.
 NOUN_TAGS = {"NNG", "NNP"}
 
+# 주제 별칭을 Kiwi 에 등록할 때 줄 가중치. 0 으로 두면 등록해도 기존 분석을 못 이겨
+# `신제품` 이 신(XPN) + 제품(NNG) 으로 갈린다 — 조용히 무시된다.
+USER_WORD_SCORE = 3.0
+
 _kiwi = None
+_topic_words: list[str] | None = None
+
+
+def topic_words() -> list[str]:
+    """주제 사전의 별칭 중 한 낱말인 것. Kiwi 에 통째로 등록해 쪼개지지 않게 한다.
+
+    왜 필요한가. `topics.py` 는 **부분문자열**로 매칭하고 색인은 **형태소**로 나눈다.
+    단위가 어긋나면 사전에 있는 말을 검색기가 못 찾는다. 실측으로 이랬다.
+
+        신제품   -> ['제품']        `신` 이 접두사로 떨어진다
+        화학적   -> ['화학']        `적` 이 접미사로 떨어진다
+        차단지수 -> ['차단','지수']  둘로 갈린다
+        제형     -> []             `제`(접두) + `형`(한 글자) 로 전멸한다
+
+    `제형` 이 빈 결과인 것은 평가 문제가 아니라 검색 결함이다. 사용자가 `제형` 을
+    치면 아무것도 안 나온다.
+
+    **서술어 별칭은 등록하면 안 된다.** `하얗게`·`하얘` 를 명사로 넣으면 Kiwi 가
+    둘을 각각 한 낱말로 주는데, 등록 전에는 둘 다 `하얗` 으로 통합됐다. 활용형을
+    명사로 박으면 형태소 통합이 깨져서 `하얗게` 질의가 `하얘` 문서를 놓친다.
+
+    그래서 **Kiwi 에게 먼저 물어보고 고른다** — 별칭 그대로 넣었을 때
+      (1) 한 토큰으로 안 나오고
+      (2) 서술어(VA·VV) 읽기가 없는
+    것만 등록한다. 손으로 목록을 관리하면 주제 사전이 바뀔 때 어긋난다.
+
+    공백이 든 별칭(`눈 시림`·`톤 업`)과 조사가 붙은 별칭(`땀에`)도 빠진다.
+    낱말이 아니어서 Kiwi 에 넣을 수 없고, 부분문자열 사전에서만 의미가 있다.
+    """
+    global _topic_words
+    if _topic_words is not None:
+        return _topic_words
+
+    from kiwipiepy import Kiwi
+    bare = Kiwi()                       # 사용자 사전을 얹지 않은 판정용
+    words = set()
+    for entry in TOPICS:
+        for alias in entry["ko"]:
+            if " " in alias or len(alias) < 2 or alias.endswith("에"):
+                continue
+            tokens = bare.tokenize(alias)
+            if len(tokens) == 1 and tokens[0].form == alias:
+                continue                # 이미 한 낱말이다. 건드릴 이유가 없다
+            if any(t.tag.split("-")[0] in {"VA", "VV"} for t in tokens):
+                continue                # 활용형이다. 명사로 박으면 통합이 깨진다
+            words.add(alias)
+    _topic_words = sorted(words)
+    return _topic_words
 
 
 def kiwi(dictionary: Path = Path("seeds/user_dictionary.tsv")):
@@ -78,6 +132,12 @@ def kiwi(dictionary: Path = Path("seeds/user_dictionary.tsv")):
             _kiwi.load_user_dictionary(str(dictionary))
         else:
             print(f"[경고] 사용자 사전이 없다: {dictionary}")
+        # 주제 별칭은 `topics.py` 가 정본이므로 TSV 에 복사하지 않고 여기서 넣는다.
+        # 사전을 두 벌 두면 어느 쪽이 맞는지 알 수 없게 된다.
+        for word in topic_words():
+            # score 를 줘야 기존 분석을 이긴다. 0 으로 두면  이 여전히
+            # 신(XPN) + 제품(NNG) 으로 갈린다 — 등록해도 조용히 무시된다.
+            _kiwi.add_user_word(word, "NNG", USER_WORD_SCORE)
     return _kiwi
 
 
@@ -105,7 +165,41 @@ def tokenize(text: str) -> list[str]:
     # 한국어 문서 안의 라틴 토큰(SPF50+, Tinosorb)은 정규식이 담당한다.
     # Kiwi 는 기호가 붙으면 쪼개므로 `SPF50+` 를 한 덩어리로 못 준다.
     out.extend(t for t in LATIN_RE.findall(text.lower()) if len(t) >= 2)
-    return out
+    return [t for token in out for t in expand(token)]
+
+
+_expanded: dict[str, tuple[str, ...]] = {}
+_expand_words: list[str] | None = None
+
+
+def expand_words() -> list[str]:
+    """부분문자열 확장에 쓸 별칭 전부. **등록 목록과 다른 집합이다.**
+
+    등록(`topic_words`)은 "Kiwi 가 쪼개니까 붙여 달라"는 요청이고, 확장은
+    "Kiwi 가 한 낱말로 잘 주는데 그 안에 별칭이 들어 있다"는 반대 상황이다.
+    `끈적임` 이 그 예다 — Kiwi 가 온전히 주므로 등록 대상이 아니지만, 질의
+    `끈적` 이 그 문서를 찾으려면 확장이 필요하다.
+    """
+    global _expand_words
+    if _expand_words is None:
+        _expand_words = sorted({a for e in TOPICS for a in e["ko"]
+                                if " " not in a and len(a) >= 2})
+    return _expand_words
+
+
+def expand(token: str) -> tuple[str, ...]:
+    """토큰이 주제 별칭을 품고 있으면 별칭도 같이 낸다.
+
+    `topics.py` 는 부분문자열로 매칭하므로 **색인도 같은 단위를 만들어야** 한다.
+    질의와 문서 양쪽에 똑같이 적용되므로 대칭이 깨지지 않는다. 고유 토큰 단위로
+    기억해 두므로 별칭 검사를 12만 토큰에 대해 한 번만 한다.
+    """
+    hit = _expanded.get(token)
+    if hit is None:
+        extra = [w for w in expand_words() if w != token and w in token]
+        hit = (token, *extra)
+        _expanded[token] = hit
+    return hit
 
 
 class Index:
@@ -210,6 +304,7 @@ def build(common: Path, sources: list[str] | None = None,
         f":{sorted(sources or [])}"
         # 토큰화 규칙이 바뀌면 캐시를 버려야 한다. 안 그러면 옛 토큰으로 평가한다
         f":{sorted(KIWI_TAGS)}:{sorted(NOUN_TAGS)}:{LATIN_RE.pattern}:{K1}:{B}"
+        f":{topic_words()}:{expand_words()}:{USER_WORD_SCORE}"
         .encode()).hexdigest()[:16]
     path = cache / f"index-{stamp}.pkl"
     if path.exists():
@@ -245,11 +340,28 @@ def demo() -> None:
     assert "백탁" in tokenize("백탁 없이 촉촉해요"), tokenize("백탁 없이 촉촉해요")
     # 조사·어미는 빠져야 한다
     assert "이" not in tokenize("백탁이 심해요")
+    # 주제 별칭은 통째로 한 토큰이어야 한다. 쪼개지면 사전에 있는 말을 못 찾는다
+    assert tokenize("제형이 좋다") and "제형" in tokenize("제형이 좋다")
+    assert "신제품" in tokenize("신제품 출시")
+    assert "차단지수" in tokenize("차단지수 높은 제품")
+    assert "피부톤" in tokenize("피부톤 보정")
+    # 낱말이 아닌 별칭은 등록하지 않는다
+    assert "땀에" not in topic_words() and "눈 시림" not in topic_words()
     # 서술어 어간은 한 글자여도 살려야 한다. 이걸 버려서 질의 토큰이 0개가 됐다
     assert tokenize("하얗게 떠서 싫다"), "형용사·동사만 있는 질의가 비면 검색이 안 된다"
     assert "하얗" in tokenize("하얗게 떠서 싫다")
     assert "시리" in tokenize("눈이 시려요")
-    assert "끈적이" in tokenize("끈적여서 별로")
+    # 확장 — 끈적임 은 Kiwi 가 한 낱말로 주므로 별칭 끈적 을 같이 내야 한다
+    assert "끈적" in tokenize("끈적임 심함") and "끈적임" in tokenize("끈적임 심함")
+    assert expand("끈적임") == ("끈적임", "끈적")
+    assert expand("백탁") == ("백탁",)          # 자기 자신은 중복으로 넣지 않는다
+    assert expand("아무말") == ("아무말",)
+    # 등록 목록과 확장 목록은 다른 집합이다. 섞으면 둘 중 하나가 망가진다
+    assert "끈적" in expand_words() and "끈적" not in topic_words()
+    assert "제형" in topic_words() and "제형" in expand_words()
+    # 활용형 별칭은 등록하지 않는다 — 등록하면 하얗게/하얘 통합이 깨진다
+    assert "하얗게" not in topic_words() and "하얘" not in topic_words()
+    assert tokenize("하얗게") == tokenize("하얘")
     # 한 글자 명사는 여전히 버린다
     assert "것" not in tokenize("이런 것 좋아요")
 
