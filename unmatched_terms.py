@@ -1,362 +1,266 @@
 #!/usr/bin/env python3
-"""사전에 없는 고빈도 표현을 코퍼스에서 뽑는다. 사전 확장 후보 목록을 만드는 도구.
+"""사전에 걸리지 않은 고빈도 명사를 뽑는다. 사전의 천장을 사람이 보게 만드는 목록이다.
 
-왜 필요한가:
-`topics.py` 사전에 없는 성분·표현은 영원히 관측되지 않는다. "신규 등장" 판정이
-잡을 수 있는 것은 사전에 이미 있는 주제 중 새로 뜬 것뿐이다. R&D 기회 탐색에서
-이것은 실질적 제약이다.
+왜. 기획안 §11 에 최대 한계를 이렇게 적어 뒀다 — "사전에 없는 성분은 관측되지 않는다.
+신규 등장 판정이 잡는 것은 사전에 이미 있는 13개 중 새로 뜬 것뿐이다." R&D 기회 탐색에서
+이건 실질적 제약이고, 대응책으로 약속한 것이 이 목록이다.
 
-왜 외부 성분 목록을 쓰지 않는가:
-식약처 INCI 명단 같은 외부 목록을 넣으면 코퍼스에 없는 단어가 섞인다. 실측으로
-확인했다 — 자외선차단 성분 11종을 넣어봤더니 아보벤존 1건, 옥토크릴렌 2건,
-옥티녹세이트·호모살레이트·유비놀·유솔렉스 0건이었다. 유튜버와 소비자는
-"무기자차/유기자차"라는 범주어로만 말하고 개별 필터 이름은 쓰지 않는다.
-`topics.py`가 이미 같은 이유로 추측 별칭 18개를 제거한 기록이 있다.
+무엇을 하나. 판정 모집단의 문서를 형태소 분석해 명사를 뽑고, 그중 **우리 사전에 걸리지
+않는 것**만 남긴다. 자동으로 사전에 넣지 않는다. 사람이 보고 `topics.py` 를 고칠지
+판단하는 재료다.
 
-그래서 방향을 뒤집는다: **코퍼스가 실제로 말하는 것**을 세고, 그중 사전에
-없는 것을 사람에게 보여준다. 사전 등재는 사람이 결정하고 `topics.py`에서만 한다.
+**빈도만으로는 쓸 수 없다.** 처음에 그렇게 뽑아 보니 상위가 피부·제품·감사·언니·구매로
+채워졌다. 선크림 영상이라서 많은 말이 아니라 한국어 댓글이라서 많은 말이다.
+그래서 composition 과 같은 방식을 쓴다 — 절대 빈도가 아니라 **대조군 대비 비중**이다.
 
-불용어와 조사는 lexicon.json을 쓴다. 팀 전원이 쓰는 단일 사전이므로 여기서
-따로 만들지 않는다.
+  선크림군   product 34채널 장문 중 선크림 언급 영상과 그 댓글
+  대조군     같은 채널의 장문 중 **선크림을 언급하지 않은** 영상
+  lift       선크림군 등장 문서 비율 / 대조군 등장 문서 비율
 
-이 도구가 뽑을 수 있는 것과 못 하는 것 (실측 2026-08-19, 선크림 영상 962편/댓글 60,348건):
+lift 가 1 근처면 선크림과 무관한 일반어다. 높을수록 선크림 문맥에 특이한 말이다.
+댓글에는 대조군이 없다(댓글은 주제 사전에 걸린 영상에서만 수집했다). 그래서 lift 는
+영상으로 계산하고 댓글 수는 참고로 함께 낸다.
 
-- **뽑힌다: 제품·브랜드명.** 상위 120개 중 약 45개가 브랜드·제품 라인이었다
-  (딘시·어반쉐이드·구디너프·셀라보·아넷사·조선미녀·아쿠아티카·realbarrier 등).
-  공백으로 분리된 고유명사라 토큰이 된다.
-- **뽑히지 않는다: 성분명.** 같은 조건에서 성분 후보는 3개뿐이었다. 이유 두 가지다.
-  (1) 한국어 성분명은 복합어 안에 붙는다(`센텔라아시아티카추출물`·`병풀추출물`).
-      공백 기준 토큰화로는 `센텔라`가 분리되지 않는다.
-  (2) 성분은 선크림뿐 아니라 화장품 전반에 나오므로 keyness가 1에 가까워 탈락한다.
-      `--min-keyness 1.0`으로 풀어도 (1) 때문에 여전히 안 잡힌다.
+"사전에 걸리지 않는다"의 판정은 `match_topics(명사)` 가 빈 결과인지로 한다. 별칭 판정을
+따로 만들면 본 파이프라인과 어긋나므로 같은 함수를 쓴다.
 
-  성분은 `topics.py`처럼 **부분문자열 매칭 + 실측 후 0건 제거** 방식으로 넣어야 한다.
-  부분문자열로 재보면 코퍼스에 실제로 있다 — 센텔라·병풀·시카 279편/547건,
-  히알루론산 136/194, 어성초 122/179, 세라마이드 93/152, 티트리 86/147,
-  비타민C 67/284, 판테놀 52/150, 나이아신아마이드 38/268.
-  ponytail: 형태소 분석기를 붙이면 (1)이 풀리지만 새 의존성이 필요하다.
-  부분문자열 매칭으로 충분히 잡히므로 지금은 붙이지 않는다.
+형태소 분석은 Kiwi 를 쓰고 사용자 사전(`seeds/user_dictionary.tsv`)을 반드시 적용한다.
+사전 없이 돌리면 `백탁` 이 `백`+`탁`, `눈시림` 이 `눈`+`시리`+`ㅁ` 으로 쪼개져
+결과가 쓸모없어진다.
+
+브랜드·제품명은 제거하지 않고 표시만 한다. 신규 브랜드의 등장도 관측 대상이므로
+사람이 보고 판단하는 게 맞다.
+
+사용법:
+    python unmatched_terms.py
 """
-
 from __future__ import annotations
 
 import argparse
+import collections
 import csv
-import json
-import re
-import sys
-from collections import Counter
 from pathlib import Path
-from typing import Iterable, Iterator, Sequence
 
-from topics import TOPICS, match_topics
+from topics import match_topics
 
-csv.field_size_limit(10 ** 7)
+csv.field_size_limit(10 ** 8)
 
-SHORTS_MAX_SECONDS = 60
-SUNSCREEN_TERMS = [k.lower() for k in next(t for t in TOPICS if t["topic"] == "선크림")["ko"]]
-
-# 한글 2~10자 또는 영문 3~20자. 숫자 단독과 한 글자는 버린다.
-TOKEN_RE = re.compile(r"[가-힣]{2,10}|[A-Za-z][A-Za-z0-9]{2,19}")
-# URL·해시태그·타임스탬프는 토큰화 전에 지운다. 설명란의 절반 이상이 이것들이다.
-NOISE_RE = re.compile(r"https?://\S+|[#@]\S+|\d{1,2}:\d{2}(?::\d{2})?|\b\d+원\b")
-# 조사 절단 규칙은 lexicon.json이 정본이다. 여기 하드코딩하지 않는다.
-# 절단이 없으면 `세라마이드가`·`세라마이드는`·`세라마이드를`이 각각 다른 단어로
-# 세어져 어느 것도 상위에 오지 못하고, 목록이 활용형으로 뒤덮인다(실측 200개 중 45개).
-# ponytail: 규칙 기반 절단이다. 형태소 분석기가 필요해지면 여기만 바꾸면 된다.
-_PARTICLE_RE: re.Pattern[str] | None = None
+NOUN_TAGS = {"NNG", "NNP", "SL"}   # 일반명사·고유명사·외국어
+MIN_LENGTH = 2                     # 한 글자 명사는 잡음이 많다
+MIN_DOCS = 5                       # 우리 표본 기준과 같게 둔다
+MIN_LIFT = 2.0                     # 대조군 대비 이 배수 미만은 일반어로 본다
+FIELDS = ["noun", "lift", "sun_video_docs", "other_video_docs", "comment_docs",
+          "quarters_present", "peak_quarter", "peak_docs", "inci_products",
+          "looks_like_brand"]
 
 
-def build_particle_re(particles: Sequence[str]) -> re.Pattern[str]:
-    """긴 조사부터 매칭해야 `에게서`가 `에`로 잘리지 않는다."""
-    alts = "|".join(re.escape(p) for p in sorted(particles, key=len, reverse=True))
-    return re.compile(rf"(?:{alts})$")
+def is_word(noun: str) -> bool:
+    """자모 조각과 기호를 걸러낸다. 자모 반복이 명사로 잡혀 상위에 올라온다."""
+    return all("가" <= c <= "힣" or c.isascii() for c in noun)
 
 
-def load_lexicon(path: Path) -> tuple[set[str], list[str], str]:
-    """(불용어, 조사, 사전 버전). protected에 있는 표현은 불용어에서 뺀다.
+def read(path: Path) -> list[dict]:
+    with path.open(encoding="utf-8-sig", newline="") as h:
+        return list(csv.DictReader(h))
 
-    팀 전원이 쓰는 단일 사전이므로 불용어·조사를 이 파일에서만 관리한다.
-    반환한 버전은 실행 기록(manifest)에 남겨 결과를 재현할 수 있게 한다.
+
+def quarter_of(published_at: str) -> str:
+    year, month = published_at[:4], int(published_at[5:7])
+    return f"{year}Q{(month - 1) // 3 + 1}"
+
+
+def load_population(common: Path) -> list[tuple[str, str, str]]:
+    """(bucket, quarter, text). bucket 은 sun_video / other_video / comment.
+
+    선크림군은 판정 모집단과 같고, 대조군은 같은 채널의 선크림 아닌 장문이다.
     """
-    data = json.loads(path.read_text(encoding="utf-8"))
-    words = {w.lower() for group in data.get("stopwords", {}).values() for w in group}
-    words -= {p.lower() for p in data.get("protected", [])}
-    particles = list(data.get("particles", []))
-    if not particles:
-        raise SystemExit(f"{path}에 particles가 없습니다. lexicon 버전을 확인하세요.")
-    return words, particles, str(data.get("version", "unknown"))
+    product = {r["channel_id"] for r in read(common / "channel.csv")
+               if r["panel_role"] == "product"}
+    sunscreen = {m["doc_id"] for m in read(common / "mention.csv")
+                 if m["topic_id"] == "선크림"}
 
-
-def dictionary_terms() -> set[str]:
-    """사전이 이미 잡는 표현. 이미 등재된 것을 후보로 내놓지 않기 위해 쓴다."""
-    terms: set[str] = set()
-    for entry in TOPICS:
-        for term in entry["ko"] + entry["latin"] + entry["mfds_inci"]:
-            terms.add(term.lower())
-    return terms
-
-
-def read_csv(path: Path) -> Iterator[dict[str, str]]:
-    with path.open(encoding="utf-8-sig", newline="") as handle:
-        yield from csv.DictReader(handle)
-
-
-def tokenize(text: str) -> list[str]:
-    """토큰과, 조사를 뗀 어간을 함께 낸다.
-
-    어간만 내지 않고 둘 다 내는 이유: 조사 절단이 규칙 기반이라 `증가` -> `증`
-    같은 오절단이 가능하다. 원형도 세면 오절단된 쪽은 빈도가 낮아 밀려나고
-    올바른 쪽이 살아남는다. 절단 결과가 2자 미만이면 절단하지 않는다.
-    """
-    pattern = _PARTICLE_RE
-    out: list[str] = []
-    for token in TOKEN_RE.findall(NOISE_RE.sub(" ", text).lower()):
-        out.append(token)
-        if pattern is None:
-            continue
-        stem = pattern.sub("", token)
-        if stem != token and len(stem) >= 2:
-            out.append(stem)
-    return out
-
-
-def load_panel(path: Path) -> dict[str, str]:
-    return {r["channel_id"]: r.get("panel_role") or "unset" for r in read_csv(path)}
-
-
-class Corpus:
-    """선크림 코퍼스와 그 여집합(비선크림)을 함께 센다.
-
-    문서 빈도를 센다(한 문서에서 같은 단어가 10번 나와도 1). 설명란에 같은
-    문구를 반복하는 채널 하나가 순위를 지배하지 않게 하기 위한 것이다.
-    """
-
-    def __init__(self) -> None:
-        self.video_in: Counter = Counter()
-        self.video_out: Counter = Counter()
-        self.comment_in: Counter = Counter()
-        self.comment_out: Counter = Counter()
-        self.n_video_in = self.n_video_out = 0
-        self.n_comment_in = self.n_comment_out = 0
-
-
-def collect(run_dirs: Iterable[Path], panel: dict[str, str]) -> Corpus:
-    corpus = Corpus()
-    in_scope: dict[str, bool] = {}
-
-    for run_dir in run_dirs:
-        for row in read_csv(run_dir / "processed" / "videos.csv"):
-            if panel.get(row["channel_id"]) != "product":
+    videos: dict[str, str] = {}
+    docs: list[tuple[str, str, str]] = []
+    comments: list[tuple[str, str]] = []
+    with (common / "document.csv").open(encoding="utf-8-sig", newline="") as h:
+        for row in csv.DictReader(h):
+            if row["quality_flags"]:
                 continue
-            duration = row.get("duration_seconds")
-            if not duration or int(duration) <= SHORTS_MAX_SECONDS:
-                continue
-            text = f"{row.get('title') or ''} {row.get('description') or ''}"
-            sunscreen = any(term in text.lower() for term in SUNSCREEN_TERMS)
-            in_scope[row["source_item_id"]] = sunscreen
-            tokens = set(tokenize(text))
-            if sunscreen:
-                corpus.n_video_in += 1
-                corpus.video_in.update(tokens)
-            else:
-                corpus.n_video_out += 1
-                corpus.video_out.update(tokens)
-
-    for run_dir in run_dirs:
-        path = run_dir / "processed" / "comments.csv"
-        if not path.exists():
-            continue
-        for row in read_csv(path):
-            sunscreen = in_scope.get(row["video_id"])
-            if sunscreen is None:
-                continue
-            tokens = set(tokenize(row.get("text") or ""))
-            if sunscreen:
-                corpus.n_comment_in += 1
-                corpus.comment_in.update(tokens)
-            else:
-                corpus.n_comment_out += 1
-                corpus.comment_out.update(tokens)
-
-    return corpus
+            if (row["source"] == "youtube_video" and row["content_type"] == "video_long"
+                    and row["channel_id"] in product):
+                q = quarter_of(row["published_at"])
+                if row["doc_id"] in sunscreen:
+                    videos[row["source_item_id"]] = q
+                    docs.append(("sun_video", q, row["text"]))
+                else:
+                    docs.append(("other_video", q, row["text"]))
+            elif row["source"] == "youtube_comment":
+                comments.append((row["parent_item_id"], row["text"]))
+    # 댓글은 부모 영상의 분기에 배정한다. 자기 시각을 쓰면 분모가 정의되지 않는다.
+    for parent, text in comments:
+        if parent in videos:
+            docs.append(("comment", videos[parent], text))
+    return docs
 
 
-def keyness(hits_in: int, n_in: int, hits_out: int, n_out: int) -> float:
-    """선크림 문서에서의 출현율 ÷ 비선크림 문서에서의 출현율.
+def load_ingredient_names(path: Path | None) -> tuple[set[str], collections.Counter]:
+    """(브랜드·제품명, 성분명별 제품 수).
 
-    기능어(`감사합니다`·`같아요`)는 양쪽에 같은 비율로 나오므로 1에 가깝다.
-    선크림 고유 표현은 1보다 크다. 불용어 목록을 손으로 쓰지 않아도 걸러지는
-    이유가 이것이다. 라플라스 보정으로 0 나눗셈을 막는다.
+    성분명 쪽이 이 스크립트의 핵심이다. 식약처·올리브영 성분표에 실제로 있는 말이
+    우리 사전에 없다면 그건 바로 추가 후보다. 브랜드는 반대로 추가하면 안 되는 쪽이다.
     """
-    if n_in == 0 or n_out == 0:
-        return 0.0
-    return ((hits_in + 1) / (n_in + 1)) / ((hits_out + 1) / (n_out + 1))
+    if not path or not path.exists():
+        return set(), collections.Counter()
+    brands, inci = set(), collections.defaultdict(set)
+    for row in read(path):
+        for field in ("brand", "product_name"):
+            value = (row.get(field) or "").strip()
+            if value:
+                brands.add(value.replace(" ", ""))
+        name = (row.get("ingredient") or "").strip().replace(" ", "")
+        if name:
+            inci[name].add(row.get("product_name") or "")
+    return brands, collections.Counter({k: len(v) for k, v in inci.items()})
 
 
-def candidates(
-    corpus: Corpus,
-    stopwords: set[str],
-    known: set[str],
-    min_documents: int,
-    min_keyness: float,
-) -> list[dict[str, object]]:
-    """사전에 없고 선크림 문서에 편중된 표현을 keyness 순으로 낸다."""
+def run(common: Path, ingredients: Path | None, dictionary: Path,
+        stopwords: Path, out: Path, top: int) -> None:
+    from kiwipiepy import Kiwi
+
+    kiwi = Kiwi()
+    if dictionary.exists():
+        kiwi.load_user_dictionary(str(dictionary))
+    else:
+        print(f"[경고] 사용자 사전이 없다: {dictionary}. 백탁·눈시림이 쪼개진다")
+    stop = {l.strip() for l in stopwords.read_text(encoding="utf-8").splitlines()
+            if l.strip() and not l.startswith("#")} if stopwords.exists() else set()
+    brands, inci = load_ingredient_names(ingredients)
+
+    channels = {r["channel_title"].replace(" ", "")
+                for r in read(common / "channel.csv") if r.get("channel_title")}
+
+    docs = load_population(common)
+    counts = collections.Counter(d[0] for d in docs)
+    print(f"선크림 장문 {counts['sun_video']:,} · 대조군 장문 {counts['other_video']:,} · "
+          f"댓글 {counts['comment']:,}")
+
+    per_source: dict[str, collections.Counter] = {
+        "sun_video": collections.Counter(), "other_video": collections.Counter(),
+        "comment": collections.Counter()}
+    per_quarter: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
+    covered_cache: dict[str, bool] = {}
+
+    for (source, quarter, text), tokens in zip(docs, kiwi.tokenize((d[2] for d in docs))):
+        seen = set()
+        for token in tokens:
+            if token.tag not in NOUN_TAGS or len(token.form) < MIN_LENGTH:
+                continue
+            noun = token.form
+            if noun in seen or noun in stop or noun.isdigit() or not is_word(noun):
+                continue
+            if noun.replace(" ", "") in channels:      # 채널명은 주제가 아니다
+                continue
+            covered = covered_cache.get(noun)
+            if covered is None:
+                # 본 파이프라인과 같은 함수로 판정한다. 별칭 규칙을 두 벌 두지 않는다.
+                covered = bool(match_topics(noun, include_excluded=True))
+                covered_cache[noun] = covered
+            if covered:
+                continue
+            seen.add(noun)
+        for noun in seen:
+            per_source[source][noun] += 1
+            per_quarter[noun][quarter] += 1
+
+    n_sun = max(1, counts["sun_video"])
+    n_other = max(1, counts["other_video"])
     rows = []
-    for token in set(corpus.video_in) | set(corpus.comment_in):
-        if token in stopwords:
+    for noun, sun in per_source["sun_video"].most_common():
+        if sun < MIN_DOCS:
             continue
-        # 사전 표현의 부분문자열이거나 사전 표현을 포함하면 이미 잡히는 것으로 본다.
-        # 조사가 붙은 형태(`차단이`)도 어간(`차단`)으로 한 번 더 본다. 이게 없으면
-        # 어간은 걸러지고 활용형만 살아남는 비대칭이 생긴다.
-        stem = _PARTICLE_RE.sub("", token) if _PARTICLE_RE else token
-        if any(term in token or token in term for term in known):
+        other = per_source["other_video"][noun]
+        # 대조군에 한 번도 없으면 분모가 0 이라 lift 가 무한이 된다.
+        # 0 대신 1건으로 두어(라플라스 보정) 순위가 폭발하지 않게 한다.
+        lift = (sun / n_sun) / (max(other, 1) / n_other)
+        if lift < MIN_LIFT:
             continue
-        if len(stem) >= 2 and any(term in stem or stem in term for term in known):
-            continue
-        video_hits = corpus.video_in.get(token, 0)
-        comment_hits = corpus.comment_in.get(token, 0)
-        if video_hits + comment_hits < min_documents:
-            continue
-        v_key = keyness(video_hits, corpus.n_video_in, corpus.video_out.get(token, 0), corpus.n_video_out)
-        c_key = keyness(comment_hits, corpus.n_comment_in, corpus.comment_out.get(token, 0), corpus.n_comment_out)
-        best = max(v_key, c_key)
-        if best < min_keyness:
-            continue
-        rows.append(
-            {
-                "term": token,
-                "video_documents": video_hits,
-                "comment_documents": comment_hits,
-                "video_keyness": round(v_key, 2),
-                "comment_keyness": round(c_key, 2),
-            }
-        )
-    rows.sort(key=lambda r: -max(float(r["video_keyness"]), float(r["comment_keyness"])))
-    return rows
+        quarters = per_quarter[noun]
+        peak, peak_n = quarters.most_common(1)[0]
+        rows.append({
+            "noun": noun, "lift": round(lift, 2),
+            "sun_video_docs": sun, "other_video_docs": other,
+            "comment_docs": per_source["comment"][noun],
+            "quarters_present": len(quarters),
+            "peak_quarter": peak, "peak_docs": peak_n,
+            # 성분표에 있는데 사전에 없으면 최우선 추가 후보다
+            "inci_products": inci[noun.replace(" ", "")],
+            # 브랜드는 정확히 일치할 때만 표시한다. 부분문자열로 보면 일반어까지 걸린다
+            "looks_like_brand": "true" if noun.replace(" ", "") in brands else "",
+        })
+    rows.sort(key=lambda r: -r["lift"])
+
+    out.parent.mkdir(parents=True, exist_ok=True)
+    with out.open("w", encoding="utf-8-sig", newline="") as h:
+        writer = csv.DictWriter(h, fieldnames=FIELDS)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    print(f"사전 밖 명사 중 선크림 문서 {MIN_DOCS}건 이상 & lift {MIN_LIFT} 이상 : {len(rows):,}종")
+    print()
+    print(f"{'명사':<16}{'lift':>7}{'선크림':>7}{'대조':>7}{'댓글':>7}"
+          f"{'분기':>5}{'최다분기':>9}  브랜드")
+    shown = 0
+    for r in rows:
+        if shown >= top:
+            break
+        shown += 1
+        print(f"{r['noun']:<16}{r['lift']:>7.1f}{r['sun_video_docs']:>7}"
+              f"{r['other_video_docs']:>7}{r['comment_docs']:>7}"
+              f"{r['quarters_present']:>5}{r['peak_quarter']:>9}"
+              f"  {'브랜드' if r['looks_like_brand'] else ''}")
+    hits = sorted((r for r in rows if r["inci_products"]),
+                  key=lambda r: -r["inci_products"])
+    print()
+    print(f"이 중 성분표에 실제로 있는 말 {len(hits)}종 — 사전 추가 최우선 후보")
+    for r in hits[:20]:
+        print(f"{r['noun']:<16}{r['lift']:>7.1f}{r['sun_video_docs']:>7}"
+              f"{r['comment_docs']:>7}   성분표 {r['inci_products']:,}개 제품")
+    print()
+    print(f"{out} 저장 — 자동으로 사전에 넣지 않는다. 사람이 보고 topics.py 를 고친다")
 
 
 def demo() -> None:
-    global _PARTICLE_RE
-    _PARTICLE_RE = build_particle_re(["은", "는", "이", "가", "을", "를", "에게서", "에"])
-    # 긴 조사가 먼저 매칭돼야 한다 — `에게서`가 `에`로 잘리면 어간이 깨진다
-    assert _PARTICLE_RE.sub("", "친구에게서") == "친구"
-    assert tokenize("백탁 촉촉!") == ["백탁", "촉촉"]
-    assert tokenize("a") == []  # 한 글자는 버린다
-    assert tokenize("SPF50") == ["spf50"]
-    # URL·해시태그·타임스탬프는 토큰이 되지 않는다
-    assert tokenize("보세요 https://link.coupang.com/abc 여기") == ["보세요", "여기"]
-    assert tokenize("#선크림추천 좋아요") == ["좋아요"]
-    assert tokenize("0:35 인트로") == ["인트로"]
-    # 조사를 뗀 어간이 함께 나온다 — 이게 없으면 활용형이 목록을 뒤덮는다
-    assert tokenize("세라마이드가") == ["세라마이드가", "세라마이드"]
-    assert tokenize("판테놀은 좋다") == ["판테놀은", "판테놀", "좋다"]
-    # 오절단 방어: 절단하면 1자가 되는 경우는 절단하지 않는다
-    assert tokenize("증가") == ["증가"]
-    assert tokenize("여기") == ["여기"]
-    # keyness: 양쪽에 같은 비율로 나오는 기능어는 1에 가깝다
-    assert abs(keyness(50, 100, 50, 100) - 1.0) < 0.05
-    # 선크림 쪽에만 나오면 1보다 훨씬 크다
-    assert keyness(50, 100, 0, 100) > 20
-    assert keyness(0, 100, 50, 100) < 0.1
-    assert keyness(1, 0, 1, 0) == 0.0  # 빈 코퍼스 방어
-
-    def corpus_of(vin, vout, n_in=100, n_out=100):
-        c = Corpus()
-        c.video_in, c.video_out = Counter(vin), Counter(vout)
-        c.n_video_in, c.n_video_out = n_in, n_out
-        c.n_comment_in = c.n_comment_out = 1
-        return c
-
-    # 사전에 이미 있는 표현은 후보에서 빠진다
-    out = candidates(corpus_of({"백탁": 50, "센텔라": 40}, {}), set(), {"백탁", "촉촉"}, 10, 2.0)
-    assert [r["term"] for r in out] == ["센텔라"], out
-    # 불용어도 빠진다
-    out = candidates(corpus_of({"추천": 99, "센텔라": 40}, {}), {"추천"}, set(), 10, 2.0)
-    assert [r["term"] for r in out] == ["센텔라"], out
-    # min_documents 미만도 빠진다
-    assert candidates(corpus_of({"희귀어": 3}, {}), set(), set(), 10, 2.0) == []
-    # keyness가 낮으면(양쪽에 고르게 나오면) 빠진다
-    assert candidates(corpus_of({"같아요": 50}, {"같아요": 50}), set(), set(), 10, 2.0) == []
-    print("[demo] 통과")
+    assert quarter_of("2026-04-01T00:00:00Z") == "2026Q2"
+    assert quarter_of("2023-12-31T23:59:59Z") == "2023Q4"
+    # 사전에 이미 있는 말은 후보에서 빠져야 한다
+    assert match_topics("백탁", include_excluded=True)
+    assert match_topics("선크림", include_excluded=True)
+    # 사전에 없는 말은 남아야 한다
+    assert not match_topics("병원", include_excluded=True)
+    assert not match_topics("가격", include_excluded=True)
+    # 자모 조각은 명사 후보가 아니다
+    assert is_word("백탁") and is_word("SPF") and is_word("판테놀")
+    assert not is_word("ᅲᅲ") and not is_word("ᄒᄒ")
+    print("demo ok")
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="사전 확장 후보 추출 (코퍼스 기반)")
-    parser.add_argument("run_dir", type=Path, nargs="*", help="수집 run 디렉터리")
-    parser.add_argument("--panel", type=Path, default=Path("seeds/channels_v1.csv"))
-    parser.add_argument("--lexicon", type=Path, default=Path("lexicon.json"))
-    parser.add_argument("--min-documents", type=int, default=20, help="문서 빈도 하한")
-    parser.add_argument("--top", type=int, default=200, help="상위 몇 개까지 낼지")
-    parser.add_argument("--min-keyness", type=float, default=2.0, help="선크림 편중도 하한. 1.0이면 필터 없음")
-    parser.add_argument("--out", type=Path, help="CSV 저장 경로. 없으면 표준출력")
-    parser.add_argument("--demo", action="store_true", help="자체 점검만 실행")
-    args = parser.parse_args()
-
-    if args.demo:
+    p = argparse.ArgumentParser(description=__doc__,
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--common", type=Path, default=Path("common"))
+    p.add_argument("--ingredients", type=Path,
+                   default=Path("reports/ingredient_normalized.csv"),
+                   help="브랜드·제품명 표시용. 없으면 표시만 비워 둔다")
+    p.add_argument("--dictionary", type=Path, default=Path("seeds/user_dictionary.tsv"))
+    p.add_argument("--stopwords", type=Path, default=Path("seeds/stopwords_ko.txt"))
+    p.add_argument("--out", type=Path, default=Path("reports/unmatched_terms.csv"))
+    p.add_argument("--top", type=int, default=40)
+    p.add_argument("--demo", action="store_true")
+    a = p.parse_args()
+    if a.demo:
         demo()
         return 0
-    if not args.run_dir:
-        parser.error("run_dir을 하나 이상 지정하세요.")
-
-    global _PARTICLE_RE
-    stopwords, particles, lexicon_version = load_lexicon(args.lexicon)
-    _PARTICLE_RE = build_particle_re(particles)
-    known = dictionary_terms()
-    corpus = collect(list(args.run_dir), load_panel(args.panel))
-    rows = candidates(corpus, stopwords, known, args.min_documents, args.min_keyness)[: args.top]
-
-    print(
-        f"[scope] 선크림 영상 {corpus.n_video_in:,}편·댓글 {corpus.n_comment_in:,}건 "
-        f"vs 비선크림 영상 {corpus.n_video_out:,}편·댓글 {corpus.n_comment_out:,}건",
-        file=sys.stderr,
-    )
-    print(
-        f"[filter] lexicon v{lexicon_version} · 불용어 {len(stopwords)}개 · 조사 {len(particles)}개 · "
-        f"사전 표현 {len(known)}개 · 문서빈도 >= {args.min_documents} · keyness >= {args.min_keyness}",
-        file=sys.stderr,
-    )
-
-    handle = args.out.open("w", encoding="utf-8-sig", newline="") if args.out else sys.stdout
-    try:
-        writer = csv.DictWriter(handle, fieldnames=["term", "video_documents", "comment_documents", "video_keyness", "comment_keyness"], lineterminator="\n")
-        writer.writeheader()
-        writer.writerows(rows)
-    finally:
-        if args.out:
-            handle.close()
-            print(f"[out] {args.out} - 후보 {len(rows)}개", file=sys.stderr)
-
-    if args.out:
-        # 실행 기록. 어떤 필터로 뽑은 목록인지 남기지 않으면 결과를 재현할 수 없다.
-        manifest = {
-            "tool": "unmatched_terms.py",
-            "run_dirs": [str(d) for d in args.run_dir],
-            "panel": str(args.panel),
-            "lexicon": str(args.lexicon),
-            "lexicon_version": lexicon_version,
-            "filters": {
-                "shorts_max_seconds": SHORTS_MAX_SECONDS,
-                "panel_role": "product",
-                "sunscreen_terms": SUNSCREEN_TERMS,
-                "min_documents": args.min_documents,
-                "min_keyness": args.min_keyness,
-                "top": args.top,
-                "stopword_count": len(stopwords),
-                "particle_count": len(particles),
-                "dictionary_term_count": len(known),
-            },
-            "corpus": {
-                "sunscreen_videos": corpus.n_video_in,
-                "sunscreen_comments": corpus.n_comment_in,
-                "other_videos": corpus.n_video_out,
-                "other_comments": corpus.n_comment_out,
-            },
-            "candidates_written": len(rows),
-        }
-        path = args.out.with_suffix(".manifest.json")
-        path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"[out] {path}", file=sys.stderr)
+    run(a.common, a.ingredients, a.dictionary, a.stopwords, a.out, a.top)
     return 0
 
 
