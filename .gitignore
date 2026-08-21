@@ -11,9 +11,9 @@ _archive/
 .venv/
 __pycache__/
 *.pyc
-common/
 
 # 댓글 원문이 그대로 들어 있어 올리지 않는다. 기획안 §4 — 원문은 분석 목적
 # 범위에서만 보관하고 재배포하지 않는다. 생성은 evidence_comments.py 로 재현한다.
 reports/evidence_comments.csv
-!common/README_인계.md
+common/*.csv
+common/*.zip
