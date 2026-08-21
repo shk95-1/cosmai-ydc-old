@@ -28,3 +28,4 @@ reports/opportunity_cards.json
 
 # 정규화본은 수호님 원본에서 재생성한다. normalize_ingredients.py 로 재현.
 reports/ingredient_normalized.csv
+reports/unmatched_terms.csv
