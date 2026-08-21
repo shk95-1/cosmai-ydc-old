@@ -12,10 +12,13 @@
 커머스 쪽은 긍정률로 바꿔 놓고 해석한다.
 
 주의 — 커머스 데이터의 두 가지 성질을 전제로 한다.
-  1. `review_topic` 은 2026-08-18 스냅샷이다. 시계열이 아니므로 우리의 최근 확정 분기
-     (2026Q2)와만 비교한다. 추세 비교는 하지 않는다.
-  2. 원본에 같은 행이 여러 번 적재돼 있다(한 제품 한 선택지가 17회 반복 관측).
-     그대로 집계하면 제품 수와 평균이 부풀려지므로 반드시 중복을 제거한다.
+  1. `review_topic` 의 관측 창은 며칠뿐이다(2026-08-18~21). 분기 추세를 만들 길이가
+     아니므로 우리의 최근 확정 분기(2026Q2)와 현재 상태를 대조하는 데만 쓴다.
+  2. `review_topic` 은 시간별 스냅샷이다. 같은 (제품, 선택지)가 수집 시점마다 한 행씩
+     쌓여 있다(현재 28개 시점, 7.2배). 중복 적재가 아니라 설계상 시계열이며
+     (제품, 선택지, captured_at) 조합에 진짜 중복은 0행이다.
+     다만 속성 평가는 리뷰가 쌓여야 바뀌므로 시점 간 값이 거의 같다. 집계할 때는
+     제품·선택지별 **최신 시점 한 행만** 쓴다. 전부 세면 제품 수가 시점 수만큼 부풀려진다.
 
 사용법:
     python commerce_crosscheck.py --api http://100.106.220.24:3000
@@ -106,17 +109,18 @@ def run(api: str, judgement: Path, quarter: str, out: Path) -> None:
 
     raw = fetch_all(api, "review_topic",
                     "source,product_key,topic_group,topic_name,share_pct,captured_at")
-    # 같은 (제품, 선택지) 가 여러 번 적재돼 있다. 집계 전에 반드시 접는다.
-    seen = set()
-    deduped = []
+    # 시간별 스냅샷이므로 (제품, 선택지)별 최신 시점만 남긴다. API 반환 순서에
+    # 기대지 않도록 captured_at 으로 명시해 고른다.
+    latest: dict[tuple, dict] = {}
     for r in raw:
         key = (r["source"], r["product_key"], r["topic_group"], r["topic_name"])
-        if key in seen:
-            continue
-        seen.add(key)
-        deduped.append(r)
-    print(f"review_topic {len(raw):,}행 -> 중복 제거 {len(deduped):,}행 "
-          f"({len(raw) / max(1, len(deduped)):.1f}배 부풀려져 있었음)")
+        cur = latest.get(key)
+        if cur is None or (r.get("captured_at") or "") > (cur.get("captured_at") or ""):
+            latest[key] = r
+    deduped = list(latest.values())
+    stamps = {r.get("captured_at") for r in raw}
+    print(f"review_topic {len(raw):,}행 = {len(deduped):,}개 (제품,선택지) x {len(stamps)}개 시점"
+          f" -> 최신 시점만 {len(deduped):,}행 사용")
 
     # (제품, topic_group) -> [(선택지, 비중)]
     grouped: dict[tuple, list[tuple[str, float]]] = defaultdict(list)
