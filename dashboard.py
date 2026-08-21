@@ -58,7 +58,7 @@ def num(v, default=None):
 
 
 def build(judgement: Path, evidence: Path, gain: Path, commerce: Path,
-          sources_csv: Path, out: Path) -> dict:
+          sources_csv: Path, ingredient_csv: Path, out: Path) -> dict:
     rows = read(judgement)
     if not rows:
         raise SystemExit(f"{judgement} 가 비었다. trend_judgement 를 먼저 만들어야 한다.")
@@ -103,7 +103,7 @@ def build(judgement: Path, evidence: Path, gain: Path, commerce: Path,
     data = {
         "sources": sources, "quarters": quarters, "topics": topics,
         "cells": cells, "evidence": ev, "colors": TYPE_COLOR, "meta": meta,
-        "gain": read(gain), "commerce": read(commerce), "xsrc": read(sources_csv),
+        "gain": read(gain), "commerce": read(commerce), "xsrc": read(sources_csv), "ingr": read(ingredient_csv),
     }
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(render(data), encoding="utf-8")
@@ -334,6 +334,25 @@ function verify() {{
   }} else {{
     h += '<p>아직 대조할 데이터가 없습니다.</p>';
   }}
+  if (D.ingr.length) {{
+    h += '<h2 style="margin-top:22px">검증 4 · 실제 제품 구성과 담론 비교</h2>'
+      + '<p>전성분표로 선크림 368개를 무기·유기·혼합자차로 분류했습니다. 분모가 다르므로'
+      + ' (담론은 13개 주제 전체, 제품은 선크림 제품 수) 크기가 아니라 <b>순위</b>를 봅니다.</p>'
+      + '<table class="vt"><tr><th>유형</th><th>제품</th><th>제품 비중</th><th>순위</th>'
+      + '<th>댓글 비중</th><th>순위</th><th>배수</th><th>해석</th></tr>'
+      + D.ingr.map(r => `<tr><td>${{r.filter_type}}</td>`
+        + `<td class="n">${{r.products}}</td><td class="n">${{r.product_pct}}%</td>`
+        + `<td class="n">${{r.product_rank}}</td>`
+        + `<td class="n">${{r.youtube_comment_pct}}%</td>`
+        + `<td class="n">${{r.comment_rank}}</td>`
+        + `<td class="n">${{r.product_over_comment ? r.product_over_comment + 'x' : '—'}}</td>`
+        + `<td>${{r.reading}}</td></tr>`).join('')
+      + '</table>'
+      + '<p style="margin-top:8px"><b>제품이 가장 많은 두 유형이 담론에서는 뒤에 있습니다.</b>'
+      + ' 혼합자차는 제품의 32.9% 인데 댓글 구성비는 1.21% 로, 우리가 표본 부족으로 판정'
+      + ' 보류한 주제입니다. 제품이 없어서가 아니라 <b>아무도 그 이름으로 말하지 않기'
+      + ' 때문</b>이었습니다. 반대로 무기자차는 제품 비중이 가장 낮은데 담론은 1위입니다.</p>';
+  }}
   $('verify').innerHTML = h;
 }}
 
@@ -360,13 +379,15 @@ def main() -> int:
     p.add_argument("--gain", type=Path, default=Path("reports/transcript_gain.csv"))
     p.add_argument("--commerce", type=Path, default=Path("reports/commerce_crosscheck.csv"))
     p.add_argument("--sources", type=Path, default=Path("reports/source_composition.csv"))
+    p.add_argument("--ingredient", type=Path, default=Path("reports/ingredient_axis.csv"))
     p.add_argument("--out", type=Path, default=Path("reports/dashboard.html"))
     p.add_argument("--demo", action="store_true")
     a = p.parse_args()
     if a.demo:
         demo()
         return 0
-    meta = build(a.judgement, a.evidence, a.gain, a.commerce, a.sources, a.out)
+    meta = build(a.judgement, a.evidence, a.gain, a.commerce, a.sources,
+                 a.ingredient, a.out)
     size = a.out.stat().st_size / 1024
     print(f"{a.out} : {size:.0f} KB · {meta['cells']}셀 · 판정 {meta['judged']}개")
     return 0
