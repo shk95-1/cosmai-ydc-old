@@ -25,3 +25,6 @@ reports/dashboard.html
 # 댓글 원문이 실려 있어 evidence_comments.csv 와 같은 규칙을 적용한다. cards.py 로 재현한다.
 reports/opportunity_cards.md
 reports/opportunity_cards.json
+
+# 정규화본은 수호님 원본에서 재생성한다. normalize_ingredients.py 로 재현.
+reports/ingredient_normalized.csv
