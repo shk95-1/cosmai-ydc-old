@@ -137,9 +137,10 @@ def demo() -> None:
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    # 정본은 리포 안이다. 카톡 폴더를 기본값으로 두면 파일이 사라지는 순간
+    # 스크립트가 재현되지 않는다. 실제로 한 번 사라졌다.
     p.add_argument("--input", type=Path,
-                   default=Path(r"C:\Users\Admin\Documents\카카오톡 받은 파일"
-                                r"\product_ingredient_function (1).csv"))
+                   default=Path("data/external/product_ingredient_function.csv"))
     p.add_argument("--out", type=Path, default=Path("reports/ingredient_normalized.csv"))
     p.add_argument("--demo", action="store_true")
     a = p.parse_args()

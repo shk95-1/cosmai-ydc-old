@@ -1,0 +1,18 @@
+{
+  "file": "product_ingredient_function.csv",
+  "origin": "수호님 제작 — 식약처 기능성화장품 보고품목 x 올리브영 제품 매핑",
+  "received": "2026-08-20 카카오톡",
+  "sha256": "b12c01ece988f379bc1e72121b5c2fe85929b0ec11f6cc4a61608c0a06986edf",
+  "bytes": 4246545,
+  "rows": 30097,
+  "products": 577,
+  "brands": 207,
+  "columns": [
+    "product_name",
+    "brand",
+    "ingredient_order",
+    "ingredient",
+    "function"
+  ],
+  "note": "원본이 카톡 폴더에서 한 번 사라져 리포로 옮겼다. normalize_ingredients.py 의 정본 입력이다. 서버에는 적재하지 않기로 합의했다(파일로만 씀)."
+}
