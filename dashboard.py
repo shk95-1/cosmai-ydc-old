@@ -57,7 +57,8 @@ def num(v, default=None):
         return default
 
 
-def build(judgement: Path, evidence: Path, gain: Path, commerce: Path, out: Path) -> dict:
+def build(judgement: Path, evidence: Path, gain: Path, commerce: Path,
+          sources_csv: Path, out: Path) -> dict:
     rows = read(judgement)
     if not rows:
         raise SystemExit(f"{judgement} 가 비었다. trend_judgement 를 먼저 만들어야 한다.")
@@ -102,7 +103,7 @@ def build(judgement: Path, evidence: Path, gain: Path, commerce: Path, out: Path
     data = {
         "sources": sources, "quarters": quarters, "topics": topics,
         "cells": cells, "evidence": ev, "colors": TYPE_COLOR, "meta": meta,
-        "gain": read(gain), "commerce": read(commerce),
+        "gain": read(gain), "commerce": read(commerce), "xsrc": read(sources_csv),
     }
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(render(data), encoding="utf-8")
@@ -196,9 +197,9 @@ $('sub').textContent =
   `${{D.topics.length}}개 주제 x ${{D.quarters.length}}개 분기 x ${{D.sources.length}}개 소스 = `
   + `${{D.meta.cells}}셀 · 판정된 셀 ${{D.meta.judged}}개 · τ=${{D.meta.tau}} · 지표 ${{D.meta.version}}`;
 $('warn').innerHTML =
-  '<b>지금 격자에 있는 소스는 YouTube 뿐입니다.</b> 통합 결과가 아닙니다. '
-  + 'NAVER·커머스가 같은 형식으로 들어오면 탭이 추가됩니다. '
-  + '커머스는 시계열이 아니라 현재 스냅샷이므로 격자가 아니라 아래 검증 절에 들어갑니다.';
+  '<b>격자(시계열 판정)에 있는 소스는 YouTube 뿐입니다.</b> 커머스 리뷰는 시계열이 '
+  + '아니라 단일 시점이라 격자에 넣을 수 없고, 아래 <b>검증 1</b> 에서 같은 사전·같은 '
+  + '정의로 나란히 비교합니다. NAVER·식약처·논문은 아직 데이터를 받지 못했습니다.';
 
 D.sources.forEach(s => {{
   const b = document.createElement('button');
@@ -279,9 +280,32 @@ function detail(t, q) {{
 
 function verify() {{
   let h = '';
+  if (D.xsrc.length) {{
+    h += '<h2>검증 1 · 소스가 다르면 같은 주제를 다르게 말한다</h2>'
+      + '<p>같은 사전, 같은 구성비 정의로 소스별로 따로 계산했습니다. 소스 간 문서 수는'
+      + ' 합산하지 않습니다. 커머스 리뷰는 시계열이 아니라 단일 시점이므로 유튜브의 최근'
+      + ' 확정 분기와만 나란히 놓았습니다.</p>'
+      + '<table class="vt"><tr><th>주제</th><th>유튜브 댓글</th><th>유튜브 영상 설명</th>'
+      + '<th>커머스 리뷰</th><th>커머스−영상</th><th>해석</th></tr>'
+      + D.xsrc.map(r => {{
+          const d = +r.commerce_minus_video_pp;
+          const cls = Math.abs(d) >= 5 ? ' class="gain"' : '';
+          return `<tr><td>${{r.topic_id}}</td>`
+            + `<td class="n">${{r.youtube_comment_pct}}%</td>`
+            + `<td class="n">${{r.youtube_video_pct}}%</td>`
+            + `<td class="n">${{r.commerce_review_pct}}%</td>`
+            + `<td class="n"${{cls}}>${{d > 0 ? '+' : ''}}${{d}}%p</td>`
+            + `<td>${{r.reading}}</td></tr>`;
+        }}).join('')
+      + '</table>'
+      + '<p style="margin-top:8px"><b>유튜브는 스펙·성분을, 커머스 리뷰는 실사용 감각을'
+      + ' 담습니다.</b> 백탁이 그 대비의 극단입니다 — 영상 설명 0.31% 인데 리뷰에서는'
+      + ' 12.09% 로 다섯째입니다. 영상 설명으로 13분기 전부 표본 부족이던 주제가'
+      + ' 실재하는 주요 불만이라는 것을, 언급량이 아닌 다른 소스가 확인해 줍니다.</p>';
+  }}
   if (D.gain.length) {{
     const rows = D.gain.filter(r => +r.gained > 0);
-    h += '<h2>검증 1 · 자막을 넣으면 얼마나 더 보이나</h2>'
+    h += '<h2 style='margin-top:22px'>검증 2 · 자막을 넣으면 얼마나 더 보이나</h2>'
       + '<p>표본 측정입니다. 판정에는 반영하지 않았습니다. 자막은 공식 API 가 주지 않아'
       + ' 자료원 성격이 달라, 한계를 재는 용도로만 씁니다.</p>'
       + '<table class="vt"><tr><th>구분</th><th>주제</th><th>설명란만</th>'
@@ -292,7 +316,7 @@ function verify() {{
         + `<td class="n gain">+${{r.gained}}</td></tr>`).join('')
       + '</table>';
   }}
-  h += '<h2 style="margin-top:22px">검증 2 · 커머스 속성 평가와 대조</h2>';
+  h += '<h2 style="margin-top:22px">검증 3 · 커머스 플랫폼 자체 설문과 대조</h2>';
   if (D.commerce.length) {{
     h += '<p>언급량으로 만든 판정을 언급량이 아닌 데이터로 확인하는 자리입니다.'
       + ' 커머스는 시계열이 아니라 현재 스냅샷이라 최근 확정 분기와만 대조합니다.</p>'
@@ -335,13 +359,14 @@ def main() -> int:
     p.add_argument("--evidence", type=Path, default=Path("reports/evidence_comments.csv"))
     p.add_argument("--gain", type=Path, default=Path("reports/transcript_gain.csv"))
     p.add_argument("--commerce", type=Path, default=Path("reports/commerce_crosscheck.csv"))
+    p.add_argument("--sources", type=Path, default=Path("reports/source_composition.csv"))
     p.add_argument("--out", type=Path, default=Path("reports/dashboard.html"))
     p.add_argument("--demo", action="store_true")
     a = p.parse_args()
     if a.demo:
         demo()
         return 0
-    meta = build(a.judgement, a.evidence, a.gain, a.commerce, a.out)
+    meta = build(a.judgement, a.evidence, a.gain, a.commerce, a.sources, a.out)
     size = a.out.stat().st_size / 1024
     print(f"{a.out} : {size:.0f} KB · {meta['cells']}셀 · 판정 {meta['judged']}개")
     return 0
