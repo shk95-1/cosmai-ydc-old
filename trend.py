@@ -50,6 +50,12 @@ METRIC_VERSION = "v0.2"
 SHORTS_MAX_SECONDS = 60
 MIN_DOCUMENT_COUNT = 5  # 이 미만이면 표본 부족으로 velocity를 내지 않는다
 TREND_TOPICS = [t["topic"] for t in TOPICS if t["trend_use"]]
+
+# 포함·제외 비교용 훅. 기본은 비어 있어서 아무것도 바뀌지 않는다.
+# `spam_ad_flags.py` 가 여기에 광고 영상 id 와 (video_id, 정규화 텍스트) 를 채워
+# 같은 계산을 두 번 돌린다. 계산을 두 벌 만들면 결과가 갈라지므로 훅만 둔다.
+EXCLUDE_VIDEOS: set[str] = set()
+EXCLUDE_COMMENTS: set[tuple[str, str]] = set()
 SUNSCREEN_TERMS = [k.lower() for k in next(t for t in TOPICS if t["topic"] == "선크림")["ko"]]
 
 
@@ -113,6 +119,8 @@ def load_videos(run_dirs: Iterable[Path], panel: dict[str, str]) -> dict[str, di
         for row in read_csv(run_dir / "processed" / "videos.csv"):
             if panel.get(row["channel_id"]) != "product":
                 continue
+            if row["source_item_id"] in EXCLUDE_VIDEOS:
+                continue
             duration = row.get("duration_seconds")
             if not duration or int(duration) <= SHORTS_MAX_SECONDS:
                 continue  # 쇼츠와 길이 없는 영상(라이브 등)은 제외
@@ -169,10 +177,12 @@ def count_mentions(
             text = normalize_text(row.get("text"))
             if not text:
                 continue
+            key = (row["video_id"], text)
+            if key in EXCLUDE_COMMENTS:
+                continue      # raw 보다 앞에서 뺀다. 뒤에서 빼면 unique_ratio 만 낮아진다
             topics = match_topics(text)
             for topic in topics:                      # 중복 포함 — 비중복 비율의 분모
                 raw[(topic, meta["quarter"])] += 1
-            key = (row["video_id"], text)
             if key in seen:
                 continue
             seen.add(key)
