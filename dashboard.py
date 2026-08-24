@@ -62,7 +62,9 @@ def num(v, default=None):
 
 
 def build(judgement: Path, evidence: Path, gain: Path, commerce: Path,
-          sources_csv: Path, ingredient_csv: Path, out: Path) -> dict:
+          sources_csv: Path, ingredient_csv: Path, out: Path,
+          adfilter: Path | None = None, backtest: Path | None = None,
+          unmatched: Path | None = None, ranking: Path | None = None) -> dict:
     rows = read(judgement)
     if not rows:
         raise SystemExit(f"{judgement} 가 비었다. trend_judgement 를 먼저 만들어야 한다.")
@@ -108,6 +110,13 @@ def build(judgement: Path, evidence: Path, gain: Path, commerce: Path,
         "sources": sources, "quarters": quarters, "topics": topics,
         "cells": cells, "evidence": ev, "colors": TYPE_COLOR, "meta": meta,
         "gain": read(gain), "commerce": read(commerce), "xsrc": read(sources_csv), "ingr": read(ingredient_csv),
+        # 08.24 추가분. 없으면 그 절만 빠진다 — 화면이 깨지지 않게 빈 목록으로 둔다
+        "adf": read(adfilter) if adfilter else [],
+        "back": read(backtest) if backtest else [],
+        # 성분표에 있는데 우리 사전에 없는 말만 남긴다. 2,365종 전부는 화면에 못 담는다
+        "unmatched": [r for r in (read(unmatched) if unmatched else [])
+                      if int(r.get("inci_products") or 0) > 0],
+        "ranking": read(ranking) if ranking else [],
     }
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(render(data), encoding="utf-8")
@@ -383,6 +392,102 @@ function verify() {{
       + ' 보류한 주제입니다. 제품이 없어서가 아니라 <b>아무도 그 이름으로 말하지 않기'
       + ' 때문</b>이었습니다. 반대로 무기자차는 제품 비중이 가장 낮은데 담론은 1위입니다.</p>';
   }}
+  if (D.adf.length) {{
+    const v = '광고·협찬 영상 제외';
+    const rows = D.adf.filter(r => r.variant === v && Math.abs(+r.diff_pp) >= 0.5)
+                      .sort((a, b) => Math.abs(+b.diff_pp) - Math.abs(+a.diff_pp));
+    const flips = D.adf.filter(r => r.variant === v)
+                       .reduce((n, r) => n + (+r.flipped_cells || 0), 0);
+    h += '<h2 style="margin-top:22px">검증 5 · 광고·협찬을 빼면 결론이 바뀐다</h2>'
+      + '<p>선크림 장문 964편 중 <b>465편(48.2%)이 광고·협찬</b>입니다. 유튜버 자체 신고'
+      + ' (<code>has_paid_product_placement</code>)는 254편뿐이고 설명란 문구로 407편이'
+      + ' 걸립니다 &mdash; 신고 필드만 믿으면 절반을 놓칩니다. 아래는 465편을 빼고 같은'
+      + ' 파이프라인을 다시 돌린 결과입니다.</p>'
+      + `<p><b>판정 64셀 중 ${{flips}}셀의 유형이 뒤집히고 24셀이 표본 미달로 사라집니다.</b>`
+      + ' 그래서 빼지 않고 <b>필터 민감</b>으로 표시합니다 &mdash; 빼면 모집단이 절반이 되고,'
+      + ' 남기면 결론이 광고에 실립니다. 공짜인 선택지가 없으므로 숫자를 공개합니다.</p>'
+      + '<table class="vt"><tr><th>소스</th><th>주제</th><th>전체 기준</th>'
+      + '<th>광고 제외</th><th>차이</th><th>판정 변화</th></tr>'
+      + rows.map(r => `<tr><td>${{r.source.replace('youtube_', '')}}</td>`
+        + `<td>${{r.topic_id}}</td>`
+        + `<td class="n">${{r.composition_base_pp}}%</td>`
+        + `<td class="n">${{r.composition_kept_pp}}%</td>`
+        + `<td class="n gain">${{+r.diff_pp > 0 ? '+' : ''}}${{r.diff_pp}}%p</td>`
+        + `<td class="n">${{+r.flipped_cells ? r.flipped_cells + '셀' : '—'}}</td></tr>`).join('')
+      + '</table>';
+  }}
+  if (D.back.length) {{
+    const a = D.back.filter(r => r.hit === 'true').length;
+    const b = D.back.filter(r => r.hit_level === 'true').length;
+    h += '<h2 style="margin-top:22px">검증 6 · 과거로 돌려 판정을 채점했다</h2>'
+      + '<p>과거 분기까지만 알고 있었던 것처럼 지표를 다시 계산해 판정하고, 그 뒤 4분기에'
+      + ' 실제로 그 방향이 유지됐는지 봤습니다. <code>persistence</code> 의 기준선이 전체'
+      + ' 기간 중앙값이라, 자르지 않으면 아직 오지 않은 분기를 보고 판정하게 됩니다.</p>'
+      + `<p><b>기준 A(계속 상승) ${{a}}/${{D.back.length}}건 `
+      + `${{Math.round(100 * a / D.back.length)}}% · `
+      + `기준 B(수준 유지) ${{b}}/${{D.back.length}}건 `
+      + `${{Math.round(100 * b / D.back.length)}}%</b> 이고 <b>기저율은 47%</b> 입니다`
+      + ' (판정과 무관하게 오른 셀의 비율). 기준 A 의 직전 구간에는 급상승한 분기 자체가'
+      + ' 들어 있어 평균 회귀만으로 실패가 납니다. 그래서 두 기준을 다 냅니다.</p>'
+      + '<table class="vt"><tr><th>시점</th><th>소스</th><th>주제</th><th>판정</th>'
+      + '<th>직전 4분기</th><th>이후 4분기</th><th>A</th><th>B</th></tr>'
+      + D.back.map(r => `<tr><td>${{r.cutoff}}</td>`
+        + `<td>${{r.source.replace('youtube_', '')}}</td><td>${{r.topic_id}}</td>`
+        + `<td>${{r.trend_type}}</td>`
+        + `<td class="n">${{r.before_pp}}%</td><td class="n">${{r.after_pp}}%</td>`
+        + `<td class="n">${{r.hit === 'true' ? '적중' : '실패'}}</td>`
+        + `<td class="n">${{r.hit_level === 'true' ? '적중' : '실패'}}</td></tr>`).join('')
+      + '</table>'
+      + '<p style="margin-top:8px"><b>이 도구는 변화를 서술하고 미래를 맞히지 않습니다.</b>'
+      + ' 상승 계열 9건만 보면 기준 A 22% 로 기저율 47% 의 절반입니다. 13분기 · 계절 상품 ·'
+      + ' 964편으로는 예측 모델을 세울 수 없습니다. 그래서 카드는 &ldquo;뜰 것이다&rdquo;가'
+      + ' 아니라 <b>&ldquo;지금 이런 비대칭이 있다&rdquo;</b>로 씁니다.</p>';
+  }}
+  if (D.unmatched.length) {{
+    const rows = D.unmatched.sort((x, y) => +y.inci_products - +x.inci_products);
+    h += '<h2 style="margin-top:22px">검증 7 · 우리 사전이 못 보는 성분</h2>'
+      + '<p>기획안에 적어 둔 최대 한계가 &ldquo;사전에 없는 성분은 관측되지 않는다&rdquo;'
+      + ' 였습니다. 그 한계를 숫자로 재봤습니다. 판정 모집단을 형태소 분석해 명사를 뽑고,'
+      + ' 선크림 아닌 영상 4,993편을 대조군으로 둬서 <b>선크림 문맥에 특이한 말</b>만'
+      + ' 남긴 뒤(lift 2.0 이상), 그중 성분표에 실제로 있는 것을 골랐습니다.</p>'
+      + `<p><b>사전 밖 명사 2,365종 중 성분표에 실제로 있는 말이 ${{rows.length}}종입니다.</b>`
+      + ' 이게 사전 추가 최우선 후보이고, <b>자동으로 넣지 않았습니다</b> &mdash; 넣으면'
+      + ' 임계값·판정·카드가 전부 다시 계산되고 팀에 공유한 숫자와 어긋납니다.</p>'
+      + '<table class="vt"><tr><th>성분</th><th>성분표</th><th>lift</th>'
+      + '<th>선크림 영상</th><th>댓글</th><th>최다 분기</th></tr>'
+      + rows.map(r => `<tr><td>${{r.noun}}</td>`
+        + `<td class="n gain">${{r.inci_products}}제품</td>`
+        + `<td class="n">${{r.lift}}x</td>`
+        + `<td class="n">${{r.sun_video_docs}}</td>`
+        + `<td class="n">${{r.comment_docs}}</td>`
+        + `<td class="n">${{r.peak_quarter}}</td></tr>`).join('')
+      + '</table>';
+  }}
+  if (D.ranking.length) {{
+    const rows = D.ranking.filter(r => +r.snapshots >= 10)
+                          .sort((x, y) => +x.moved - +y.moved);
+    const pick = rows.slice(0, 6).concat(rows.slice(-6).reverse());
+    h += '<h2 style="margin-top:22px">검증 8 · 커머스 주간 순위 변동</h2>'
+      + '<p>랭킹 스냅샷이 6일치가 됐고 수집기가 계속 돌고 있습니다. 다만 그대로 쓸 수'
+      + ' 없었습니다 &mdash; <b>완전 중복이 37%(62,812행)</b> 이고, 스냅샷마다 관측한'
+      + ' 최하위 순위가 22위~100위로 달랐습니다. 얕은 스냅샷에 없는 제품을 그대로 읽으면'
+      + ' &ldquo;급락&rdquo;이 됩니다. 중복을 제거하고 <b>상위 20위까지 실제로 관측한'
+      + ' 스냅샷만</b> 남겼습니다.</p>'
+      + '<p>보정이 결론을 바꿨습니다 &mdash; 중앙 변동폭 <b>33계단 → 8계단</b>,'
+      + ' 신규 진입 <b>121건 → 8건</b>. 우리가 유튜브에서 겪은 수집 상한 아티팩트와'
+      + ' 같은 종류입니다.</p>'
+      + '<table class="vt"><tr><th>소스</th><th>브랜드</th><th>제품</th>'
+      + '<th>처음</th><th>마지막</th><th>이동</th></tr>'
+      + pick.map(r => `<tr><td>${{r.source}}</td><td>${{r.brand}}</td>`
+        + `<td>${{r.product_name.slice(0, 40)}}</td>`
+        + `<td class="n">${{r.first_rank}}</td><td class="n">${{r.last_rank}}</td>`
+        + `<td class="n${{+r.moved < 0 ? ' gain' : ''}}">`
+        + `${{+r.moved > 0 ? '+' : ''}}${{r.moved}}</td></tr>`).join('')
+      + '</table>'
+      + '<p style="margin-top:8px"><b>6일로 분기 트렌드는 못 봅니다.</b> 우리 유튜브 지표는'
+      + ' 전년 동분기 비교이고 계절성을 상쇄하려고 그렇게 만들었습니다. 커머스가 답하는'
+      + ' 질문은 다릅니다 &mdash; &ldquo;지금 무엇이 오르고 있나&rdquo;입니다.</p>';
+  }}
   $('verify').innerHTML = h;
 }}
 
@@ -410,6 +515,10 @@ def main() -> int:
     p.add_argument("--commerce", type=Path, default=Path("reports/commerce_crosscheck.csv"))
     p.add_argument("--sources", type=Path, default=Path("reports/source_composition.csv"))
     p.add_argument("--ingredient", type=Path, default=Path("reports/ingredient_axis.csv"))
+    p.add_argument("--adfilter", type=Path, default=Path("reports/spam_ad_sensitivity.csv"))
+    p.add_argument("--backtest", type=Path, default=Path("reports/backtest.csv"))
+    p.add_argument("--unmatched", type=Path, default=Path("reports/unmatched_terms.csv"))
+    p.add_argument("--ranking", type=Path, default=Path("reports/commerce_ranking.csv"))
     p.add_argument("--out", type=Path, default=Path("reports/dashboard.html"))
     p.add_argument("--demo", action="store_true")
     a = p.parse_args()
@@ -417,7 +526,8 @@ def main() -> int:
         demo()
         return 0
     meta = build(a.judgement, a.evidence, a.gain, a.commerce, a.sources,
-                 a.ingredient, a.out)
+                 a.ingredient, a.out, a.adfilter, a.backtest, a.unmatched,
+                 a.ranking)
     size = a.out.stat().st_size / 1024
     print(f"{a.out} : {size:.0f} KB · {meta['cells']}셀 · 판정 {meta['judged']}개")
     return 0
