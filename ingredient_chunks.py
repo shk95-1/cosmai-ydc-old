@@ -10,6 +10,12 @@
     ingredient_product   제품 하나 = 청크. "이 조합의 제품" 을 찾는 데 쓴다
     ingredient_term      성분 하나 = 청크. "이 성분을 쓰는 제품" 을 찾는 데 쓴다
 
+**배합 순위를 개별 순번으로 적는다.** 전성분표는 함량 순으로 쓰므로 순위가 곧
+함량 정보다. 범위만("1~25순위") 적으면 정제수가 1위인지 25위인지 알 수 없다.
+`MASTER_REPORT` §5-② 의 발견 — *"미백만 71%가 고함량 구간에 배치"* — 이 정확히
+"몇 위인지"로 갈리는 결과이므로, 순번이 없으면 그 발견을 검색으로 재현할 수 없다.
+(수호님 제안)
+
 `doc_id` 는 이렇게 만든다.
 
     ingredient_product:{제품명 sha1 앞 12자}   제품명에 대괄호·슬래시가 많아 그대로 쓸 수 없다
@@ -81,8 +87,10 @@ def product_chunks(products: dict[str, dict]) -> tuple[list[dict], set[str]]:
         if bundle:
             bundles.add(name)
         head = (f"[여러 제품이 섞인 묶음 페이지] " if bundle else "")
+        # 순번을 붙인다. 전성분표는 함량 순이므로 순위가 함량 정보다
+        listed = ", ".join(f"{i}위 {name_}" for i, name_ in enumerate(ingredients, 1))
         body = (f"{head}{entry['brand']} {name}. "
-                f"전성분 {len(ingredients)}종: " + ", ".join(ingredients))
+                f"전성분 {len(ingredients)}종: {listed}")
         doc_id = doc_id_for("ingredient_product", name)
         for ordinal, piece in enumerate(split_text(normalize_text(body))):
             rows.append({"chunk_id": f"{doc_id}#{ordinal}", "doc_id": doc_id,
@@ -96,9 +104,12 @@ def term_chunks(products: dict[str, dict], functions: dict[str, set[str]],
     """성분 하나 = 청크. 채택 제품 수에서 묶음 페이지를 뺀다."""
     used: dict[str, list[str]] = defaultdict(list)
     companions: dict[str, Counter] = defaultdict(Counter)
+    ranks: dict[str, list[int]] = defaultdict(list)
     for name, entry in products.items():
         if name in bundles:
             continue                    # 묶음 페이지는 채택 통계에 넣지 않는다
+        for position, ingredient in enumerate(entry["ingredients"], 1):
+            ranks[ingredient].append(position)
         for ingredient in entry["ingredients"]:
             used[ingredient].append(name)
         for ingredient in entry["ingredients"]:
@@ -115,8 +126,15 @@ def term_chunks(products: dict[str, dict], functions: dict[str, set[str]],
         # 제품명이 길어 다 넣으면 청크가 쪼개진다. 개수는 숫자로 이미 밝혔으므로
         # 이름은 대표 몇 개만 적는다
         sample = ", ".join(n[:40] for n in sorted(names)[:TOP_PRODUCTS])
+        # 배합 순위. 중앙값과 "상위 10위 이내" 비율을 같이 낸다 — 전자는 전형적
+        # 위치, 후자는 고함량으로 쓰이는 빈도다. 둘이 갈리는 성분이 있다
+        order = sorted(ranks[ingredient])
+        median_rank = order[len(order) // 2]
+        high = 100 * sum(1 for r in order if r <= 10) / len(order)
         body = (f"{ingredient}. 기능: {function}. "
                 f"선케어 {total}개 중 {len(names)}개({share:.1f}%)에 포함. "
+                f"배합 순위 중앙 {median_rank}위 (최고 {order[0]}위 · 최저 {order[-1]}위), "
+                f"상위 10위 이내로 쓰이는 비율 {high:.0f}%. "
                 f"함께 쓰이는 성분: {near}. 사용 제품: {sample}")
         doc_id = doc_id_for("ingredient_term", ingredient)
         for ordinal, piece in enumerate(split_text(normalize_text(body))):
@@ -199,6 +217,11 @@ def demo() -> None:
     tr = term_chunks(products, functions, bundles)
     panthenol = next(r for r in tr if r["doc_id"] == "ingredient_term:판테놀")
     assert "2개 중 2개(100.0%)" in panthenol["text"], panthenol["text"]
+    # 배합 순위가 본문에 있어야 한다. 없으면 고함량 질문에 답할 수 없다
+    assert "배합 순위 중앙" in panthenol["text"], panthenol["text"]
+    first = next(r for r in pr if r["ordinal"] == 0
+                 and r["doc_id"] == doc_id_for("ingredient_product", "제품가"))
+    assert "1위 정제수" in first["text"] and "2위 판테놀" in first["text"], first["text"]
 
     # 묶음 페이지는 채택 통계에서 빠져야 한다
     big = {"큰묶음": {"brand": "브", "ingredients": [f"성분{i}" for i in range(200)]},
