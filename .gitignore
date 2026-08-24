@@ -38,3 +38,4 @@ reports/reproducibility.json
 .cache/
 reports/retrieval_eval_*.csv
 reports/chunks_*.csv
+reports/commerce_ranking*.csv
