@@ -39,6 +39,7 @@ import csv
 import json
 import re
 import statistics
+import urllib.parse
 import urllib.request
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -47,15 +48,35 @@ BASE = "http://100.106.220.24:3000"
 PAGE = 1000
 COLUMNS = ("source,board,category_key,category_name,product_key,product_name,"
            "brand,rank,rank_delta,is_new,review_count,price,captured_at")
+# 전순서 정렬. 이 조합이 유일하지 않으면 페이징이 다시 흔들린다
+ORDER = ("captured_at.asc,source.asc,board.asc,category_key.asc,"
+         "rank.asc,product_key.asc")
 SUN_RE = re.compile(r"선크림|선케어|선블록|선스틱|suncare", re.I)
 FIELDS = ["source", "board", "product_key", "product_name", "brand",
           "snapshots", "first_rank", "last_rank", "best_rank", "worst_rank",
           "swing", "moved", "entered", "left"]
 
 
-def fetch(cache: Path, offline: bool) -> list[dict]:
-    """랭킹 전량. PostgREST 는 한 번에 1,000행이라 offset 으로 넘긴다."""
-    if cache.exists() and (offline or True):
+def fetch(cache: Path, offline: bool, freeze: str) -> list[dict]:
+    """랭킹 전량. **정지 + 정렬 + 행수 대조** 없이 offset 페이징을 하면 안 된다.
+
+    처음에 이걸 안 하고 크게 틀렸다. 정렬 없이 `limit/offset` 으로 받는 동안
+    수집기가 계속 쓰고 있었다. Postgres 는 `ORDER BY` 가 없으면 순서를 보장하지
+    않고, 그 위에 유입까지 겹치면 같은 offset 이 다른 행을 가리킨다. 결과가 이랬다.
+
+      - 같은 행이 여러 번 들어와 **완전 중복 37%** 로 보였다
+      - 다른 행은 통째로 빠져 스냅샷이 얕게 보이고, 그게 **관측 깊이 변동**으로 보였다
+
+    둘 다 서버에 없는 현상이었다. 지목한 슬라이스를 직접 조회하니 1행이었고,
+    정지 집합을 정렬해 다시 받으니 중복 0건 · 보드 22개 중 21개 깊이 고정이었다.
+    (석현님이 이 가설을 먼저 제기해 주셔서 잡았다.)
+
+    그래서 세 가지를 건다.
+      1. `captured_at < freeze` 로 작업 집합을 **정지**시킨다
+      2. 유일한 키로 **전순서 정렬**한다
+      3. 받은 행수를 서버의 `count=exact` 와 **대조**하고 어긋나면 멈춘다
+    """
+    if cache.exists():
         rows = json.loads(cache.read_text(encoding="utf-8"))
         if offline:
             print(f"캐시 {len(rows):,}행 (--offline)")
@@ -63,9 +84,18 @@ def fetch(cache: Path, offline: bool) -> list[dict]:
     if offline:
         raise SystemExit(f"캐시가 없다: {cache}")
 
+    where = f"captured_at=lt.{urllib.parse.quote(freeze)}"
+    head = urllib.request.Request(
+        f"{BASE}/rank_snapshot?{where}&select=source",
+        headers={"Accept": "application/json", "Prefer": "count=exact",
+                 "Range": "0-0"})
+    with urllib.request.urlopen(head, timeout=60) as handle:
+        expected = int(handle.headers["Content-Range"].split("/")[1])
+
     rows, offset = [], 0
     while True:
-        url = f"{BASE}/rank_snapshot?select={COLUMNS}&limit={PAGE}&offset={offset}"
+        url = (f"{BASE}/rank_snapshot?{where}&select={COLUMNS}&order={ORDER}"
+               f"&limit={PAGE}&offset={offset}")
         request = urllib.request.Request(url, headers={"Accept": "application/json"})
         with urllib.request.urlopen(request, timeout=120) as handle:
             batch = json.load(handle)
@@ -73,9 +103,14 @@ def fetch(cache: Path, offline: bool) -> list[dict]:
             break
         rows.extend(batch)
         offset += PAGE
+
+    if len(rows) != expected:
+        raise SystemExit(
+            f"행수가 어긋난다 — 서버 {expected:,} vs 받은 것 {len(rows):,}. "
+            f"페이징 중에 집합이 변했다. freeze 를 더 과거로 잡아야 한다.")
     cache.parent.mkdir(parents=True, exist_ok=True)
     cache.write_text(json.dumps(rows, ensure_ascii=False), encoding="utf-8")
-    print(f"서버에서 {len(rows):,}행 받아 {cache} 에 저장")
+    print(f"정지 시각 {freeze} 이전 {len(rows):,}행 (서버 행수와 일치) → {cache}")
     return rows
 
 
@@ -84,11 +119,11 @@ def is_suncare(row: dict) -> bool:
 
 
 def dedupe(rows: list[dict]) -> list[dict]:
-    """완전 중복 행을 뺀다. 실측으로 171,030행 중 62,812행(37%)이 중복이었다.
+    """완전 중복 행을 뺀다. **정상이면 0건이어야 한다.**
 
-    같은 (소스·보드·카테고리·시각·순위·제품)이 그대로 두 번 들어 있다. 가격까지
-    같으므로 서로 다른 관측이 아니다. 남겨 두면 변동 폭과 진입 수가 부풀고,
-    스냅샷 깊이 판단도 어긋난다(순위 100까지인데 행이 335개로 보인다).
+    한때 37% 가 중복으로 보였는데 서버가 아니라 우리 페이징 문제였다(`fetch` 주석).
+    정지·정렬로 받으면 0건이다. 그래도 이 함수를 남기는 이유는, 0 이 아니면
+    추출이 잘못됐다는 신호이기 때문이다 — `run` 이 그 수를 찍는다.
     """
     seen = set()
     out = []
@@ -103,13 +138,18 @@ def dedupe(rows: list[dict]) -> list[dict]:
 
 
 def depth_guard(rows: list[dict], depth: int) -> list[dict]:
-    """관측 깊이를 맞춘다. **이게 없으면 변동 폭이 전부 아티팩트다.**
+    """관측 깊이를 맞춘다.
 
-    실측으로 `oliveyoung suncare` 의 스냅샷이 관측한 최하위 순위가 22위~100위로
-    들쭉날쭉했다. 얕은 스냅샷에서는 86위 제품이 아예 안 잡히는데, 그걸 그대로
-    읽으면 "이탈" 또는 "순위 급락"이 된다. 유튜브 수집 상한 10 아티팩트와 같다.
+    한때 `oliveyoung suncare` 의 깊이가 22위~100위로 들쭉날쭉해 보였는데, 그것도
+    페이징 표류였다. 정지·정렬로 받으면 보드 22개 중 21개가 깊이 고정이고
+    suncare 는 85개 스냅샷 전부 100위다. 남은 변동은 daisomall sale_rising
+    한 보드(92~100)뿐이다.
 
-    그래서 두 가지를 동시에 건다.
+    그래도 이 함수를 남긴다. 수집기가 부분 응답을 적재하면 언제든 다시 생기는
+    현상이고, 보드마다 목표 깊이가 다르므로(glowpick 20 · hwahae 9 · 나머지 100)
+    비교 구간을 맞추는 일 자체는 여전히 필요하다.
+
+    두 가지를 동시에 건다.
       1. `depth` 위까지 실제로 관측한 스냅샷만 남긴다
       2. 그 스냅샷 안에서도 `depth` 이내 순위만 본다
     """
@@ -229,12 +269,14 @@ def report(tracks: list[dict], out: Path) -> None:
     print(f"{out} 저장")
 
 
-def run(cache: Path, out: Path, offline: bool, all_categories: bool, depth: int) -> int:
-    rows = fetch(cache, offline)
+def run(cache: Path, out: Path, offline: bool, all_categories: bool, depth: int,
+        freeze: str) -> int:
+    rows = fetch(cache, offline, freeze)
     before = len(rows)
     rows = dedupe(rows)
-    print(f"완전 중복 제거 {before:,} -> {len(rows):,} "
-          f"({100 * (before - len(rows)) / before:.0f}% 가 중복이었다)")
+    dropped = before - len(rows)
+    print(f"완전 중복 {dropped:,}행"
+          + ("" if dropped == 0 else f" — 0 이 아니면 추출이 잘못됐다는 신호다"))
     if not all_categories:
         picked = [r for r in rows if is_suncare(r)]
         print(f"선케어 필터 {len(rows):,} -> {len(picked):,}행")
@@ -252,7 +294,7 @@ def run(cache: Path, out: Path, offline: bool, all_categories: bool, depth: int)
     density(rows)
 
     print()
-    print("=== 깊이 보정 없음 — 아티팩트가 섞여 있다 ===")
+    print("=== 깊이 보정 없음 ===")
     report(track(rows), out.with_name(out.stem + "_raw.csv"))
 
     guarded = depth_guard(rows, depth)
@@ -322,13 +364,15 @@ def main() -> int:
     p.add_argument("--all", action="store_true", dest="all_categories",
                    help="선케어 필터를 걸지 않는다")
     p.add_argument("--depth", type=int, default=20,
-                   help="관측 깊이 보정 기준 순위. 실측 최소 깊이가 22위였다")
+                   help="관측 깊이 보정 기준 순위. 보드별 목표 깊이의 최소가 glowpick 20 이다")
+    p.add_argument("--freeze", default="2026-08-24T00:00:00+00:00",
+                   help="이 시각 이전만 받는다. 페이징 중 유입을 막는 장치다")
     p.add_argument("--demo", action="store_true")
     a = p.parse_args()
     if a.demo:
         demo()
         return 0
-    return run(a.cache, a.out, a.offline, a.all_categories, a.depth)
+    return run(a.cache, a.out, a.offline, a.all_categories, a.depth, a.freeze)
 
 
 if __name__ == "__main__":
