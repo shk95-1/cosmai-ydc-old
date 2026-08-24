@@ -53,7 +53,7 @@ from topics import TOPICS
 csv.field_size_limit(10 ** 8)
 
 K = 10
-FIELDS = ["mode", "topic_id", "query", "gold_size", "retrieved",
+FIELDS = ["mode", "engine", "topic_id", "query", "gold_size", "retrieved",
           "p_at_k", "mrr", "hit"]
 
 
@@ -103,12 +103,20 @@ def score(ranked: list[str], gold: set[str]) -> tuple[float, float, bool]:
 
 
 def run(common: Path, mode: str, out: Path, sources: list[str] | None,
-        no_cache: bool) -> int:
+        no_cache: bool, engine: str, chunks: list[Path]) -> int:
+    # 색인은 heldout 의 정답 계산(질의 토큰이 든 문서 빼기)에 필요하므로 항상 만든다.
+    # 벡터만 재는 경우에도 정답 정의는 어휘 기준이어야 셋을 같은 기준으로 비교한다.
     index, _origin = bm25.build(common, sources,
-                                None if no_cache else Path(".cache/bm25"))
+                                None if no_cache else Path(".cache/bm25"), chunks)
+    if engine == "bm25":
+        search = index.search
+    else:
+        import hybrid
+        search, _o = hybrid.make_engine(engine, common, chunks, no_cache=no_cache)
+
     gold_all = load_gold(common)
     print(f"색인 {index.n:,}개 문서 · 고유 토큰 {len(index.postings):,}")
-    print(f"모드 {mode} · 질의 {len(queries(mode))}개")
+    print(f"검색기 {engine} · 모드 {mode} · 질의 {len(queries(mode))}개")
     print()
 
     rows = []
@@ -118,9 +126,9 @@ def run(common: Path, mode: str, out: Path, sources: list[str] | None,
             gold -= docs_with_tokens(index, alias)
         if not gold:
             continue                      # 정답이 없는 질의는 채점 불가
-        ranked = [doc for doc, _s in index.search(alias, K)]
+        ranked = [doc for doc, _s in search(alias, K)]
         p, mrr, hit = score(ranked, gold)
-        rows.append({"mode": mode, "topic_id": topic, "query": alias,
+        rows.append({"mode": mode, "engine": engine, "topic_id": topic, "query": alias,
                      "gold_size": len(gold), "retrieved": len(ranked),
                      "p_at_k": round(p, 3), "mrr": round(mrr, 3),
                      "hit": "true" if hit else "false"})
@@ -146,8 +154,14 @@ def run(common: Path, mode: str, out: Path, sources: list[str] | None,
     print()
     if mode == "literal":
         print("이 숫자는 성능이 아니라 고장 감지용이다. P@10 이 0.9 밑이면 토큰화를 의심한다.")
-    else:
+    elif engine == "bm25":
         print("이 숫자가 벡터가 넘어야 하는 선이다. BM25 는 글자가 안 겹치면 못 찾는다.")
+    else:
+        # 채택 기준은 미리 정해 뒀다. 결과를 보고 기준을 만들면 그건 성능이 아니다
+        print("BM25 의 heldout 은 구조적으로 0.000 이다. "
+              + ("0 을 넘었으므로 임베딩이 기여한 몫이 있다."
+                 if any(r["hit"] == "true" for r in rows)
+                 else "0 을 못 넘었으므로 붙일 이유가 없다."))
     print(f"{out} 저장")
     return 0
 
@@ -179,13 +193,16 @@ def main() -> int:
     p.add_argument("--source", action="append")
     p.add_argument("--out", type=Path)
     p.add_argument("--no-cache", action="store_true")
+    p.add_argument("--engine", choices=["bm25", "vector", "hybrid"], default="bm25")
+    p.add_argument("--chunks", action="append", type=Path,
+                   default=[Path("reports/chunks_ingredient_mfds.csv")])
     p.add_argument("--demo", action="store_true")
     a = p.parse_args()
     if a.demo:
         demo()
         return 0
-    out = a.out or Path(f"reports/retrieval_eval_{a.mode}.csv")
-    return run(a.common, a.mode, out, a.source, a.no_cache)
+    out = a.out or Path(f"reports/retrieval_eval_{a.mode}_{a.engine}.csv")
+    return run(a.common, a.mode, out, a.source, a.no_cache, a.engine, a.chunks)
 
 
 if __name__ == "__main__":
