@@ -37,3 +37,4 @@ reports/reproducibility.json
 !data/external/
 .cache/
 reports/retrieval_eval_*.csv
+reports/chunks_*.csv
