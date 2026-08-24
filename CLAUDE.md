@@ -28,9 +28,15 @@ GPU         RTX 4060 Laptop 8GB (CUDA 610.62). 인코딩 배치는 32 로 시작
 DB          http://100.106.220.24:3000              PostgREST, 스키마 trend_radar / tubedepth
             노출 안 된 스키마: academic (논문) ← 현준님께 노출 요청 중
 DGX 앱      http://100.96.113.69:8800               현준님. 여기서는 ping 이 안 간다
-설치된 것    kiwipiepy 0.23.2 · numpy 2.5.1
-없는 것      torch · transformers · sentence-transformers  (인코딩은 GPU 머신에서)
+설치된 것    kiwipiepy 0.23.2 · numpy 2.5.1 · torch 2.6.0+cu124
+            sentence-transformers 6.0.0 · transformers 5.15.1 (08.24 설치)
 ```
+
+**pypi 설치가 한 번 DNS 로 실패했다**(`getaddrinfo failed`). DNS·연결은 정상이었고
+재시도로 됐다. 막히면 `--retries 5 --timeout 60` 을 붙인다.
+
+`--index-url https://download.pytorch.org/whl/cu124` 로 torch 를 먼저 넣어야 한다.
+순서를 바꾸면 CPU 판이 깔린다.
 
 ## 3. 정본 (이게 아니면 숫자가 어긋난다)
 
