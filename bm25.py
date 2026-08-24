@@ -295,16 +295,49 @@ def load_documents(common: Path, sources: list[str] | None = None
     return doc_ids, texts, origin
 
 
+def load_chunks(paths: list[Path]) -> tuple[list[str], list[str], dict[str, str]]:
+    """청크 CSV 를 문서처럼 읽는다. 색인 단위는 `chunk_id` 다.
+
+    왜 필요한가. `document.csv` 는 유튜브만 들어 있다. 성분·식약처는 `chunks.py`
+    계약(5칸) 파일로만 존재하고 공통 스키마 변환기가 아직 없다. 그 변환기를
+    기다리면 발표까지 검색이 유튜브만 찾는다.
+
+    청크를 색인 단위로 쓰는 게 오히려 맞다 — 벡터 쪽도 청크 단위로 인코딩하므로
+    두 검색기가 **같은 단위**를 본다. RRF 로 순위를 합칠 때 단위가 다르면 못 합친다.
+    """
+    doc_ids, texts, origin = [], [], {}
+    for path in paths:
+        if not path.exists():
+            print(f"[경고] 청크 파일이 없다: {path}")
+            continue
+        with path.open(encoding="utf-8-sig", newline="") as handle:
+            for row in csv.DictReader(handle):
+                doc_ids.append(row["chunk_id"])
+                texts.append(row["text"])
+                origin[row["chunk_id"]] = row["source"]
+    return doc_ids, texts, origin
+
+
 def build(common: Path, sources: list[str] | None = None,
-          cache: Path | None = Path(".cache/bm25")) -> tuple[Index, dict[str, str]]:
+          cache: Path | None = Path(".cache/bm25"),
+          chunks: list[Path] | None = None) -> tuple[Index, dict[str, str]]:
     """색인을 만들거나 캐시에서 읽는다.
 
     26만 문서를 Kiwi 로 훑는 데 4분 30초 걸린다. 평가는 색인 하나로 질의를 수십 개
     돌리는 일이므로 매번 다시 만들면 실험을 못 한다. 입력 파일과 토큰화 규칙의
     해시를 키로 두어, **규칙을 고치면 캐시가 자동으로 무효**가 되게 한다.
     """
-    if cache is None:
+    def gather() -> tuple[list[str], list[str], dict[str, str]]:
         doc_ids, texts, origin = load_documents(common, sources)
+        if chunks:
+            more_ids, more_texts, more_origin = load_chunks(chunks)
+            doc_ids += more_ids
+            texts += more_texts
+            origin.update(more_origin)
+        return doc_ids, texts, origin
+
+    if cache is None:
+        doc_ids, texts, origin = gather()
         return Index(doc_ids, texts), origin
 
     source_csv = common / "document.csv"
@@ -316,6 +349,8 @@ def build(common: Path, sources: list[str] | None = None,
         f":{topic_words()}:{expand_words()}:{USER_WORD_SCORE}"
         # 사전이 바뀌면 토큰이 바뀐다. 해시를 키에 넣지 않으면 옛 색인을 계속 쓴다
         f":{[hashlib.sha256(d.read_bytes()).hexdigest()[:12] for d in DICTIONARIES if d.exists()]}"
+        # 청크 파일도 색인 내용이다. 빠뜨리면 파일을 바꿔도 옛 색인을 쓴다
+        f":{[(str(c), c.stat().st_size, c.stat().st_mtime_ns) for c in (chunks or []) if c.exists()]}"
         .encode()).hexdigest()[:16]
     path = cache / f"index-{stamp}.pkl"
     if path.exists():
@@ -323,7 +358,7 @@ def build(common: Path, sources: list[str] | None = None,
             state = pickle.load(handle)
         return Index.from_state(state), state["origin"]
 
-    doc_ids, texts, origin = load_documents(common, sources)
+    doc_ids, texts, origin = gather()
     index = Index(doc_ids, texts)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("wb") as handle:
@@ -408,6 +443,9 @@ def main() -> int:
     p.add_argument("--source", action="append",
                    help="youtube_video / youtube_comment 등. 여러 번 쓸 수 있다")
     p.add_argument("--top", type=int, default=10)
+    p.add_argument("--chunks", action="append", type=Path,
+                   default=[Path("reports/chunks_ingredient_mfds.csv")],
+                   help="청크 CSV. 성분·식약처는 공통 스키마 변환기가 없어 이쪽으로 넣는다")
     p.add_argument("--cache", default=".cache/bm25")
     p.add_argument("--no-cache", action="store_true")
     p.add_argument("--demo", action="store_true")
@@ -419,12 +457,17 @@ def main() -> int:
         p.error("--query 를 주거나 --demo 를 쓴다")
 
     index, origin = build(a.common, a.source,
-                          None if a.no_cache else Path(a.cache))
+                          None if a.no_cache else Path(a.cache), a.chunks)
     print(f"색인 {index.n:,}개 문서 · 고유 토큰 {len(index.postings):,} · "
           f"평균 길이 {index.avg_len:.1f}")
     print(f"질의 토큰: {sorted(set(tokenize(a.query)))}")
     print()
-    texts = dict(zip(*load_documents(a.common, a.source)[:2]))
+    ids, bodies, _origin = load_documents(a.common, a.source)
+    if a.chunks:
+        more_ids, more_bodies, _ = load_chunks(a.chunks)
+        ids += more_ids
+        bodies += more_bodies
+    texts = dict(zip(ids, bodies))
     for rank, (doc_id, score) in enumerate(index.search(a.query, a.top), 1):
         snippet = texts[doc_id][:110].replace("\n", " ")
         print(f"{rank:>2}. {score:>8.3f}  {origin[doc_id]:<16}{snippet}")
