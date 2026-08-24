@@ -94,6 +94,29 @@ def queries(mode: str) -> list[tuple[str, str]]:
     return out
 
 
+def to_docs(ids: list[str], k: int) -> list[str]:
+    """검색 결과를 **문서 단위로** 바꾼다. 이게 없으면 벡터 점수가 항상 0 이다.
+
+    정답(`mention.csv`)은 `doc_id` 인데 청크 색인은 `chunk_id`(`{doc_id}#{ordinal}`)를
+    돌려준다. 형식이 달라 **한 번도 일치하지 않는다** — 모델이 아무리 잘 찾아도
+    0.000 이 나온다. 실측으로 벡터가 찾아온 상위 5건 중 3번째가 정답이었는데
+    `#0` 이 붙어 있어서 못 맞춘 것으로 세어졌다.
+
+    한 문서의 여러 청크가 상위에 들어오면 한 번만 센다. 안 그러면 긴 문서 하나가
+    상위 10칸을 차지하고 P@10 이 부풀거나 깎인다.
+    """
+    out, seen = [], set()
+    for chunk_id in ids:
+        doc_id = chunk_id.rsplit("#", 1)[0]
+        if doc_id in seen:
+            continue
+        seen.add(doc_id)
+        out.append(doc_id)
+        if len(out) >= k:
+            break
+    return out
+
+
 def score(ranked: list[str], gold: set[str]) -> tuple[float, float, bool]:
     """(P@k, MRR@k, Hit@k). 정답이 비면 이 질의는 건너뛰어야 하므로 호출 전에 막는다."""
     hits = [i for i, doc in enumerate(ranked, 1) if doc in gold]
@@ -126,7 +149,8 @@ def run(common: Path, mode: str, out: Path, sources: list[str] | None,
             gold -= docs_with_tokens(index, alias)
         if not gold:
             continue                      # 정답이 없는 질의는 채점 불가
-        ranked = [doc for doc, _s in search(alias, K)]
+        # 문서 단위로 맞춰야 한다. 청크가 여러 개면 넉넉히 받아 K개 문서로 줄인다
+        ranked = to_docs([doc for doc, _s in search(alias, K * 5)], K)
         p, mrr, hit = score(ranked, gold)
         rows.append({"mode": mode, "engine": engine, "topic_id": topic, "query": alias,
                      "gold_size": len(gold), "retrieved": len(ranked),
@@ -176,6 +200,14 @@ def demo() -> None:
     assert any(t == "혼합자차" for t, _ in queries("literal"))
     # 판정에 안 쓰는 주제(선크림·추천_재구매)는 평가에서도 빠진다
     assert not any(t == "선크림" for t, _ in queries("literal"))
+
+    # 청크 id 를 문서 id 로 되돌려야 정답과 형식이 맞는다. 이걸 안 하면 항상 0 이다
+    assert to_docs(["a:1#0", "a:1#1", "b:2#0"], 2) == ["a:1", "b:2"]
+    assert to_docs(["a#0"], 5) == ["a"]
+    assert to_docs(["a", "b"], 5) == ["a", "b"], "# 이 없어도 그대로 통과해야 한다"
+    assert to_docs([], 3) == []
+    # 한 문서의 여러 청크는 한 번만. 안 그러면 긴 문서가 상위를 차지한다
+    assert to_docs(["x#0", "x#1", "x#2", "y#0"], 10) == ["x", "y"]
 
     index = bm25.Index(["a", "b", "c"],
                        ["백탁 심하다", "하얘서 싫다", "끈적임 유분"])
