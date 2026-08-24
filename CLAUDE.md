@@ -18,8 +18,13 @@
 
 ## 2. 환경
 
+**`python` 을 그냥 치면 안 된다.** PATH 의 것은 Microsoft Store 스텁이라
+`Python ` 만 찍고 끝난다. `pip` 도 PATH 에 없다. 아래 절대 경로를 쓴다.
+
 ```
-python      C:/Users/Admin/miniconda3/python.exe    (PATH 의 python 은 스토어 스텁)
+python      C:/Users/Admin/miniconda3/python.exe
+pip         C:/Users/Admin/miniconda3/python.exe -m pip
+GPU         RTX 4060 Laptop 8GB (CUDA 610.62). 인코딩 배치는 32 로 시작
 DB          http://100.106.220.24:3000              PostgREST, 스키마 trend_radar / tubedepth
             노출 안 된 스키마: academic (논문) ← 현준님께 노출 요청 중
 DGX 앱      http://100.96.113.69:8800               현준님. 여기서는 ping 이 안 간다
@@ -112,34 +117,57 @@ DGX 앱      http://100.96.113.69:8800               현준님. 여기서는 pin
 
 ## 7. 주요 명령
 
+`PY` 를 먼저 잡아 두면 나머지가 짧아진다.
+
+```bash
+PY=C:/Users/Admin/miniconda3/python.exe
+RUNS="data/panel/run_20260819T053057Z data/panel/run_20260819T054559Z"
+```
+
 ```bash
 # 지표 → 판정
-python trend.py data/panel/run_20260819T053057Z data/panel/run_20260819T054559Z --out reports/trend_sunscreen_v0.2.csv
-python judge.py reports/trend_sunscreen_v0.2.csv --out reports/trend_judgement_v0.2.csv
+$PY -X utf8 trend.py $RUNS --out reports/trend_sunscreen_v0.2.csv
+$PY -X utf8 judge.py reports/trend_sunscreen_v0.2.csv --out reports/trend_judgement_v0.2.csv
 
 # 검증
-python reproduce.py    data/panel/run_20260819T053057Z data/panel/run_20260819T054559Z
-python spam_ad_flags.py data/panel/run_20260819T053057Z data/panel/run_20260819T054559Z
-python backtest.py     data/panel/run_20260819T053057Z data/panel/run_20260819T054559Z
-python -m unittest discover -s tests
+$PY -X utf8 reproduce.py $RUNS
+$PY -X utf8 spam_ad_flags.py $RUNS
+$PY -X utf8 backtest.py $RUNS
+$PY -X utf8 -m unittest discover -s tests
 
 # 청크 → 검색
-python chunks.py                      # 유튜브
-python commerce_chunks.py             # 커머스 리뷰
-python repair_chunks.py 받은파일.csv    # 남의 청크 계약 수리
-python chunks.py --validate 파일.csv
-python bm25.py --query "판테놀 쓰는 선크림" --per-source --top 2
-python retrieval_eval.py --engine bm25 --mode heldout
-
-# 임베딩 (GPU 머신)
-pip install sentence-transformers
-python encode_chunks.py --chunks reports/chunks_youtube.csv --chunks reports/chunks_commerce.csv
-python retrieval_eval.py --engine hybrid --mode heldout
+$PY -X utf8 chunks.py
+$PY -X utf8 commerce_chunks.py
+$PY -X utf8 repair_chunks.py 받은파일.csv
+$PY -X utf8 chunks.py --validate 파일.csv
+$PY -X utf8 bm25.py --query "판테놀 쓰는 선크림" --per-source --top 2
+$PY -X utf8 retrieval_eval.py --engine bm25 --mode heldout
 
 # 화면·카드
-python dashboard.py
-python cards.py
+$PY -X utf8 dashboard.py
+$PY -X utf8 cards.py
 ```
+
+### 임베딩 (이 노트북 GPU 에서)
+
+**CUDA 판 torch 를 먼저 넣어야 한다.** 그냥 `pip install sentence-transformers` 를
+하면 CPU 판이 깔리고, 297k 청크를 CPU 로 돌리면 몇 시간이다.
+
+```bash
+$PY -m pip install torch --index-url https://download.pytorch.org/whl/cu124
+$PY -m pip install sentence-transformers
+$PY -X utf8 -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+```
+
+**세 번째가 `True` 를 찍어야** 다음으로 간다. `False` 면 CPU 판이므로 멈춘다.
+
+```bash
+$PY -X utf8 encode_chunks.py --chunks reports/chunks_youtube.csv                              --chunks reports/chunks_commerce.csv --batch 32
+$PY -X utf8 retrieval_eval.py --engine vector --mode heldout
+$PY -X utf8 retrieval_eval.py --engine hybrid --mode heldout
+```
+
+배치는 32 로 시작한다. 8GB 노트북 GPU 라 64 는 빡빡하다.
 
 첫 BM25 색인은 4~5분(형태소 분석), 이후 캐시에서 4초.
 
