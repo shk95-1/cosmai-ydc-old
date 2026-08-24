@@ -40,3 +40,4 @@ reports/retrieval_eval_*.csv
 reports/chunks_*.csv
 reports/commerce_ranking*.csv
 reports/chunks_ingredient_mfds.csv
+reports/chunks_commerce.csv
