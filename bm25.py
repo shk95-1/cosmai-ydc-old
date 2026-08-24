@@ -252,7 +252,7 @@ class Index:
             return 0.0
         return max(0.0, math.log((self.n - df + 0.5) / (df + 0.5) + 1.0))
 
-    def search(self, query: str, k: int = 10,
+    def search(self, query: str, k: int | None = 10,
                skip: set[str] | None = None) -> list[tuple[str, float]]:
         """상위 k 개 (doc_id, 점수). skip 은 후보에서 제외할 doc_id 집합이다.
 
@@ -272,7 +272,9 @@ class Index:
                 norm = tf + K1 * (1 - B + B * self.lengths[i] / (self.avg_len or 1))
                 scores[i] += weight * tf * (K1 + 1) / norm
         ranked = sorted(scores.items(), key=lambda kv: (-kv[1], self.doc_ids[kv[0]]))
-        return [(self.doc_ids[i], round(s, 4)) for i, s in ranked[:k]]
+        if k is not None:
+            ranked = ranked[:k]
+        return [(self.doc_ids[i], round(s, 4)) for i, s in ranked]
 
 
 def load_documents(common: Path, sources: list[str] | None = None
@@ -293,6 +295,37 @@ def load_documents(common: Path, sources: list[str] | None = None
             texts.append(row["text"])
             origin[row["doc_id"]] = row["source"]
     return doc_ids, texts, origin
+
+
+def by_source(index: "Index", origin: dict[str, str], query: str,
+              k: int = 5) -> dict[str, list[tuple[str, float]]]:
+    """소스별 상위 k. **근거 도구는 이걸 써야 한다.**
+
+    전역 상위 k 를 쓰면 다수 소스가 나머지를 덮는다. 실측으로 색인 269,851개 중
+    유튜브 댓글이 247,086개(92%)고 평균 16토큰이라, BM25 의 길이 보정 때문에
+    짧은 댓글이 상위를 독점한다. `판테놀 쓰는 선크림` 질의에서 소스별 첫 등장이
+    이랬다.
+
+        1위   youtube_comment
+       37위   youtube_video
+      132위   formula_full
+      293위   mfds
+      (ingredient · formula_summary 는 300위 안에 없음)
+
+    이건 점수가 틀린 게 아니라 **묻는 방식이 틀린 것**이다. "무엇이 가장 관련
+    있나" 가 아니라 "각 소스에서 무엇이 관련 있나" 를 물어야 근거가 모인다.
+    소스 하나에서 근거를 다 뽑으면 교차 확인이 안 된다.
+
+    **상위 N 을 잘라서 버킷에 담으면 안 된다.** 처음에 k*100 으로 잘랐더니
+    `mfds`(첫 등장 293위)와 `ingredient`(300위 밖)가 여전히 안 나왔다. 점수가
+    붙은 문서를 **전부** 받아서 소스별로 채운다 — 어차피 정렬 비용만 든다.
+    """
+    picked: dict[str, list[tuple[str, float]]] = defaultdict(list)
+    for doc_id, score in index.search(query, None):
+        source = origin.get(doc_id, "?")
+        if len(picked[source]) < k:
+            picked[source].append((doc_id, score))
+    return dict(picked)
 
 
 def load_chunks(paths: list[Path]) -> tuple[list[str], list[str], dict[str, str]]:
@@ -428,6 +461,17 @@ def demo() -> None:
     assert index.search("백탁", k=3, skip={"a", "c"}) == []
     # 없는 말은 빈 결과. 예외를 던지면 평가 루프가 멈춘다
     assert index.search("존재하지않는성분명", k=3) == []
+    # k=None 은 점수 붙은 것 전부. 소스별로 뽑을 때 잘라 내면 소수 소스를 놓친다
+    assert len(index.search("백탁", None)) == 2 and len(index.search("백탁", 1)) == 1
+    # 소스별 뽑기 — 다수 소스가 나머지를 덮지 않아야 한다
+    many = Index([f"c{i}" for i in range(30)] + ["ing1", "ing2"],
+                 ["백탁 심하다"] * 30 + ["백탁 성분 정보", "백탁 성분 자료"])
+    origin = {**{f"c{i}": "comment" for i in range(30)},
+              "ing1": "ingredient", "ing2": "ingredient"}
+    got = by_source(many, origin, "백탁", k=2)
+    assert set(got) == {"comment", "ingredient"}, got
+    assert len(got["comment"]) == 2 and len(got["ingredient"]) == 2, got
+
     # 캐시 왕복. dict 로 오가지 않으면 __main__.Index 로 절여져 import 시 못 읽는다
     same = Index.from_state(index.state())
     assert same.search("백탁", k=3) == index.search("백탁", k=3)
@@ -448,6 +492,8 @@ def main() -> int:
                    help="청크 CSV. 성분·식약처는 공통 스키마 변환기가 없어 이쪽으로 넣는다")
     p.add_argument("--cache", default=".cache/bm25")
     p.add_argument("--no-cache", action="store_true")
+    p.add_argument("--per-source", action="store_true",
+                   help="소스별 상위 k. 근거 도구는 이쪽이다")
     p.add_argument("--demo", action="store_true")
     a = p.parse_args()
     if a.demo:
@@ -462,6 +508,25 @@ def main() -> int:
           f"평균 길이 {index.avg_len:.1f}")
     print(f"질의 토큰: {sorted(set(tokenize(a.query)))}")
     print()
+
+    if a.per_source:
+        ids, bodies, _o = load_documents(a.common, a.source)
+        if a.chunks:
+            more_ids, more_bodies, _ = load_chunks(a.chunks)
+            ids += more_ids
+            bodies += more_bodies
+        body = dict(zip(ids, bodies))
+        found = by_source(index, origin, a.query, a.top)
+        for source in sorted(found, key=lambda s: -found[s][0][1]):
+            print(f"[{source}]")
+            for doc_id, score in found[source]:
+                snippet = body[doc_id][:104].replace("\n", " ")
+                print(f"  {score:>7.2f}  {snippet}")
+        missing = sorted(set(origin.values()) - set(found))
+        if missing:
+            print(f"(걸린 문서 없음: {', '.join(missing)})")
+        return 0
+
     ids, bodies, _origin = load_documents(a.common, a.source)
     if a.chunks:
         more_ids, more_bodies, _ = load_chunks(a.chunks)
