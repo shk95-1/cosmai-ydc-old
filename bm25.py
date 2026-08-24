@@ -122,21 +122,30 @@ def topic_words() -> list[str]:
     return _topic_words
 
 
-def kiwi(dictionary: Path = Path("seeds/user_dictionary.tsv")):
-    """Kiwi 를 한 번만 만든다. 사용자 사전 없이 쓰면 백탁이 백+탁 으로 쪼개진다."""
+# 사전 두 개를 얹는다. 담론어(백탁·눈시림)와 성분명은 출처가 다르다.
+# 성분 사전은 수호님이 성분표에서 뽑아 주신 것으로, 각주(`*`)와 안내문이 붙은
+# 항목 21개를 걸러 1,877행을 쓴다. 이게 없으면 `에칠헥실트리아존` 같은 성분명이
+# 형태소로 쪼개져 성분 검색이 조용히 안 된다.
+DICTIONARIES = (Path("seeds/user_dictionary.tsv"),
+                Path("seeds/ingredient_dictionary.tsv"))
+
+
+def kiwi(dictionaries: tuple[Path, ...] = DICTIONARIES):
+    """Kiwi 를 한 번만 만든다. 사전 없이 쓰면 백탁이 백+탁 으로 쪼개진다."""
     global _kiwi
     if _kiwi is None:
         from kiwipiepy import Kiwi
         _kiwi = Kiwi()
-        if dictionary.exists():
-            _kiwi.load_user_dictionary(str(dictionary))
-        else:
-            print(f"[경고] 사용자 사전이 없다: {dictionary}")
+        for dictionary in dictionaries:
+            if dictionary.exists():
+                _kiwi.load_user_dictionary(str(dictionary))
+            else:
+                print(f"[경고] 사전이 없다: {dictionary}")
         # 주제 별칭은 `topics.py` 가 정본이므로 TSV 에 복사하지 않고 여기서 넣는다.
         # 사전을 두 벌 두면 어느 쪽이 맞는지 알 수 없게 된다.
         for word in topic_words():
-            # score 를 줘야 기존 분석을 이긴다. 0 으로 두면  이 여전히
-            # 신(XPN) + 제품(NNG) 으로 갈린다 — 등록해도 조용히 무시된다.
+            # score 를 줘야 기존 분석을 이긴다. 0 으로 두면 등록해도 조용히
+            # 무시되고 신제품이 신(XPN) + 제품(NNG) 으로 갈린다.
             _kiwi.add_user_word(word, "NNG", USER_WORD_SCORE)
     return _kiwi
 
@@ -305,6 +314,8 @@ def build(common: Path, sources: list[str] | None = None,
         # 토큰화 규칙이 바뀌면 캐시를 버려야 한다. 안 그러면 옛 토큰으로 평가한다
         f":{sorted(KIWI_TAGS)}:{sorted(NOUN_TAGS)}:{LATIN_RE.pattern}:{K1}:{B}"
         f":{topic_words()}:{expand_words()}:{USER_WORD_SCORE}"
+        # 사전이 바뀌면 토큰이 바뀐다. 해시를 키에 넣지 않으면 옛 색인을 계속 쓴다
+        f":{[hashlib.sha256(d.read_bytes()).hexdigest()[:12] for d in DICTIONARIES if d.exists()]}"
         .encode()).hexdigest()[:16]
     path = cache / f"index-{stamp}.pkl"
     if path.exists():
@@ -338,6 +349,9 @@ def demo() -> None:
     assert "s" not in tokenize("Tinosorb S 함유")
     # 사용자 사전 확인. 이게 깨지면 검색 전체가 조용히 망가진다
     assert "백탁" in tokenize("백탁 없이 촉촉해요"), tokenize("백탁 없이 촉촉해요")
+    # 성분명은 통째로 한 토큰이어야 한다. 쪼개지면 성분 검색이 안 된다
+    for name in ("에칠헥실트리아존", "나이아신아마이드", "판테놀", "징크옥사이드"):
+        assert name in tokenize(f"{name} 함유 제품"), (name, tokenize(name))
     # 조사·어미는 빠져야 한다
     assert "이" not in tokenize("백탁이 심해요")
     # 주제 별칭은 통째로 한 토큰이어야 한다. 쪼개지면 사전에 있는 말을 못 찾는다

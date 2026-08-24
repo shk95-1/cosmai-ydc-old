@@ -1,0 +1,20 @@
+{
+  "file": "product_ingredient_function_repaired.csv",
+  "origin": "수호님 — 식약처×올리브영 매핑 원본을 step06_ingredient.py 로 복구한 판",
+  "received": "2026-08-24 카카오톡 (files (7).zip)",
+  "supersedes": "product_ingredient_function.csv (30,097행)",
+  "sha256": "6f69a1bde1a9952d238771b1b48d1318cb09691e55742c4d186fbe075aae300a",
+  "bytes": 4309454,
+  "rows": 31246,
+  "products": 577,
+  "brands": 207,
+  "columns": [
+    "product_name",
+    "brand",
+    "ingredient_order",
+    "ingredient",
+    "function"
+  ],
+  "repair": "뭉친 셀 28건 중 26건 자동 복구(A유형 21 + B유형 5). C유형 2건은 원본 유지 — 크리니크 이븐 베터 다크 스팟 디펜스가 색상 2종 전성분이 이어붙은 형태라 자동 분해 시 오분해 위험",
+  "note": "40자 초과 성분명 0건. 행 5개 이하 제품 1개(C유형). 제품 수는 원본과 같은 577."
+}
