@@ -238,6 +238,7 @@ $PY -X utf8 retrieval_eval.py --engine hybrid --mode heldout
 
 | 무엇 | 어디 |
 |---|---|
+| **진행 총정리 (팀 공유용)** | **`reports/진행_총정리.md`** |
 | 전체 흐름 (수집→검색) | `reports/전체_흐름.md` |
 | 팀 공유 현황 | `reports/유튜브파트_현황_공유.md` |
 | 임베딩·검색 계획 | `reports/임베딩_검색_계획.md` |
