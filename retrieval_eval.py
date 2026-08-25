@@ -126,7 +126,7 @@ def score(ranked: list[str], gold: set[str]) -> tuple[float, float, bool]:
 
 
 def run(common: Path, mode: str, out: Path, sources: list[str] | None,
-        no_cache: bool, engine: str, chunks: list[Path]) -> int:
+        no_cache: bool, engine: str, chunks: list[Path], vectors: Path) -> int:
     # 색인은 heldout 의 정답 계산(질의 토큰이 든 문서 빼기)에 필요하므로 항상 만든다.
     # 벡터만 재는 경우에도 정답 정의는 어휘 기준이어야 셋을 같은 기준으로 비교한다.
     index, _origin = bm25.build(common, sources,
@@ -135,7 +135,8 @@ def run(common: Path, mode: str, out: Path, sources: list[str] | None,
         search = index.search
     else:
         import hybrid
-        search, _o = hybrid.make_engine(engine, common, chunks, no_cache=no_cache)
+        search, _o = hybrid.make_engine(engine, common, chunks, vectors,
+                                        no_cache=no_cache)
 
     gold_all = load_gold(common)
     print(f"색인 {index.n:,}개 문서 · 고유 토큰 {len(index.postings):,}")
@@ -228,13 +229,16 @@ def main() -> int:
     p.add_argument("--engine", choices=["bm25", "vector", "hybrid"], default="bm25")
     p.add_argument("--chunks", action="append", type=Path,
                    default=[Path("reports/chunks_ingredient_mfds.csv")])
+    p.add_argument("--vectors", type=Path, default=Path(".cache/vectors/e5base"),
+                   help="벡터 묶음. 합본은 e5all")
     p.add_argument("--demo", action="store_true")
     a = p.parse_args()
     if a.demo:
         demo()
         return 0
     out = a.out or Path(f"reports/retrieval_eval_{a.mode}_{a.engine}.csv")
-    return run(a.common, a.mode, out, a.source, a.no_cache, a.engine, a.chunks)
+    return run(a.common, a.mode, out, a.source, a.no_cache, a.engine, a.chunks,
+               a.vectors)
 
 
 if __name__ == "__main__":
