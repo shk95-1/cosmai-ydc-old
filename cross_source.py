@@ -86,6 +86,20 @@ PAPER_QUERY = {
     "콜라겐": "collagen",
     "판테놀": "panthenol",
 }
+# **논문 축 사용 중지 (08.25).** 현준님이 `(skin)` 필터를 철회하셨고, 우리가 쓰는
+# 순수 검색어도 못 쓴다는 걸 잔존율로 확인했다.
+#
+#   엑소좀 20.6% · 트라넥삼산 30.7% · 콜라겐 33.3% · 나이아신아마이드 33.4%
+#   (= (skin) 을 붙이면 남는 비율. 나머지는 피부와 무관한 논문이다)
+#   아데노신은 19.0% 였고 현준님이 그래서 막으셨다. **엑소좀이 그와 같은 자리다.**
+#
+# 그리고 보정 자체가 틀렸다. `cosmetic` 의 잔존율은 100.1% 다 — **기준선은 화장품
+# 색인인데 분자는 전분야 색인이다.** 모집단이 다른 값으로 나눴다. "두 색인 차이가
+# 평균 0.083 으로 좁혀졌다" 도 같은 상수로 나눠서 생긴 수렴이지 일치의 증거가 아니다.
+#
+# 검증 프로토콜이 나오면 다시 켠다. 그때까지 True 로 둔다.
+PAPER_HOLD = True
+
 PAPER_BASELINE = "cosmetic"      # 색인 자체의 성장률. 이걸로 나눠야 비교가 된다
 PAPER_GAP = 0.3                  # 두 색인 보정 배수가 이만큼 벌어지면 진짜 이견
 
@@ -284,9 +298,17 @@ def run(naver_csv: Path, trend_csv: Path, formula_csv: Path,
     formula = read(formula_csv)
     youtube = [r["text"] for r in read(yt_csv)]
     commerce = [r["text"] for r in read(cm_csv)]
-    papers = paper_growth(read(paper_csv)) if paper_csv.exists() else {}
-    if not papers:
-        print(f"[경고] 논문 데이터가 없다: {paper_csv}. 성분 표의 그 칸이 빈다")
+    if PAPER_HOLD:
+        papers = {}
+        print("[중지] 논문 축을 쓰지 않는다 — 검색어가 화장품을 세지 않는다.")
+        print("       엑소좀 잔존율 20.6% (아데노신 19.0% 와 같은 자리) · "
+              "기준선 cosmetic 은 100.1%")
+        print("       모집단이 다른 값으로 나눴다. 검증 프로토콜 후 재개 "
+              "(cross_source.PAPER_HOLD)")
+    else:
+        papers = paper_growth(read(paper_csv)) if paper_csv.exists() else {}
+        if not papers:
+            print(f"[경고] 논문 데이터가 없다: {paper_csv}. 성분 표의 그 칸이 빈다")
     print(f"NAVER {len(naver):,} · 지표 {len(trend):,} · 성분표 {len(formula):,} · "
           f"유튜브 청크 {len(youtube):,} · 리뷰 청크 {len(commerce):,}")
 

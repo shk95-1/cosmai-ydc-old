@@ -9,7 +9,20 @@
 
     선행 연구 기회   논문 계열이 앞서고 소비자 언급이 낮다  ← 논문 데이터 미도착, 보류
 
-**논문이 도착해서(08.25) 그게 풀렸다.** 여기서 구현한다.
+논문이 도착해서 구현했는데(08.25 오전), **같은 날 오후에 다시 닫혔다.**
+
+현준님이 `(skin)` 필터를 철회하셨고, 우리가 쓰던 순수 검색어도 못 쓴다는 걸
+잔존율로 확인했다 — `(skin)` 을 붙이면 남는 비율이다.
+
+    엑소좀 20.6% · 트라넥삼산 30.7% · 콜라겐 33.3% · 나이아신아마이드 33.4%
+    아데노신은 19.0% 였고 현준님이 그래서 막으셨다. **엑소좀이 같은 자리다.**
+
+게다가 기준선 `cosmetic` 의 잔존율은 100.1% 다 — **분모는 화장품 색인, 분자는
+전분야 색인.** 모집단이 다른 값으로 나눴다.
+
+그래서 `cross_source.PAPER_HOLD = True` 다. 논문 칸이 비어서 들어오고 유형이
+자동으로 내려간다 — 엑소좀은 `수요 선행 공백`, 레티날의 `유행 반증`은 사라진다.
+**코드는 그대로 두고 스위치만 내렸다.** 검증 프로토콜이 나오면 다시 켠다.
 
 설계 원칙은 `cards.py` 와 같다.
   1. 유형은 규칙이 정한다. LLM 이 "이건 기회야"라고 판단하지 않는다.
@@ -18,17 +31,18 @@
      이라는 확인 가능한 음성 근거로 선다.
   4. 한계를 카드 안에 넣는다. `ratio_usable=False`·색인 이견·1월 아티팩트를 숨기지 않는다.
 
-유형 다섯 개. 셋은 기회고 하나는 경고고 하나는 기준선이다.
+유형 다섯 개. 논문 축이 중지된 지금 **뜨는 것은 셋뿐이다.**
 
-    선행 연구 기회    논문·검색이 같이 오르는데 처방에 없다        기회 — 가장 강하다
-    수요 선행 공백    검색만 오르고 처방이 0. 논문은 못 쓴다        기회 — 근거 하나가 빈다
+    선행 연구 기회    논문·검색이 같이 오르는데 처방에 없다        논문 중지로 안 뜬다
+    수요 선행 공백    검색만 오르고 처방이 0                     기회
     함량 공백        널리 채택했는데 고함량으로는 안 쓴다          기회 — 가장 확실하다
-    유행 반증        검색은 급증인데 논문이 뒷걸음                **경고. 쫓지 말 것**
+    유행 반증        검색은 급증인데 논문이 뒷걸음                논문 중지로 안 뜬다
     처방 기준선      널리 쓰고 고함량으로도 쓴다                  비교 기준. 기회가 아니다
 
-**"유행 반증" 을 카드로 내는 이유.** 레티날은 검색 287배다. 이걸 카드에서 빼면
-누군가 다시 발견해서 쫓는다. **왜 쫓지 말아야 하는지를 근거와 함께 남기는 것**이
-빼는 것보다 안전하다.
+**레티날 경고가 카드에서 사라진 것을 알고 있다.** 검색 287배인데 처방 1.2% 라
+누군가 다시 발견해서 쫓을 수 있다. 그 경고는 논문 없이도 성립하므로
+`reports/진행_총정리.md` 의 "쓰면 안 되는 것" 절에 글로 남겼다.
+**자동 카드로는 못 낸다 — 광민감성은 우리가 측정한 값이 아니다.**
 
 사용법:
     python ingredient_cards.py
@@ -159,6 +173,10 @@ def products_with(rows: list[dict], keys: tuple[str, ...], limit: int = 3) -> li
 
 
 def build(reports: Path, formula: Path, papers: Path) -> list[dict]:
+    # 논문 축이 중지되면 `cross_source_ingredient.csv` 의 논문 칸이 비어서 들어온다.
+    # classify() 가 빈 칸을 이미 다루므로(has_paper False) 따로 분기하지 않는다 —
+    # 엑소좀은 `선행 연구 기회`에서 `수요 선행 공백`으로 내려가고, 레티날의
+    # `유행 반증`은 사라진다. **그게 맞는 동작이다.** 논문 없이는 그 주장을 못 한다.
     rows = read(reports / "cross_source_ingredient.csv")
     formula_rows = read(formula) if formula.exists() else []
     total_products = len({r["product_name"] for r in formula_rows})
@@ -255,14 +273,22 @@ def build(reports: Path, formula: Path, papers: Path) -> list[dict]:
         })
 
     # 유형이 겹치지 않게 고른다. 같은 유형 카드 3장은 발표에서 한 장과 같다
-    picked, seen = [], set()
+    # 유형당 한 장만 낸다. 같은 유형 카드 3장은 발표에서 한 장과 같다.
+    # **다만 묶인 성분 이름은 카드에 남긴다.** 논문 축이 중지되면서 엑소좀·PDRN·
+    # 트라넥삼산이 한 유형으로 합쳐졌는데, 이름을 지우면 "선케어 처방 0인 성분이
+    # 셋" 이라는 사실이 사라진다. 대표 한 장 + 나머지 이름이다
+    picked, seen = [], {}
     for c in sorted(cards, key=lambda c: -c["_strength"]):
         if c["card_type"] in seen:
+            seen[c["card_type"]].append(
+                f"{c['ingredient']} (검색 {c['naver_growth_x']}배 · "
+                f"처방 {c['formula_pct']}%)")
             continue
-        seen.add(c["card_type"])
+        seen[c["card_type"]] = []
         picked.append(c)
     for c in picked:
         c.pop("_strength", None)
+        c["same_type_others"] = seen[c["card_type"]]
     return picked
 
 
@@ -297,6 +323,10 @@ def render(cards: list[dict]) -> str:
                 ""]
         if c["reading"]:
             out += [f"**대조표 판독** {c['reading']}", ""]
+        if c.get("same_type_others"):
+            out += [f"**같은 유형에 묶인 성분** — 이 카드가 대표로 서 있지만 "
+                    f"같은 발견이 {len(c['same_type_others'])}건 더 있습니다.", ""]
+            out += [f"- {x}" for x in c["same_type_others"]] + [""]
         out += ["**근거**", ""]
         for e in c["evidence"]:
             out += [f"- **{e['what']}** — `{e['source']}`"]
