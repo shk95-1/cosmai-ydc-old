@@ -65,13 +65,61 @@ TOPIC_FIELDS = ["naver_group", "topic_id", "naver_recent", "naver_rank",
                 "youtube_video_pct", "youtube_comment_pct", "comment_rank",
                 "commerce_pct", "commerce_rank", "reading"]
 ING_FIELDS = ["ingredient", "naver_index_recent", "naver_growth_x", "naver_rank",
+              "paper_epmc", "paper_pubmed", "paper_usable",
               "formula_products", "formula_pct", "median_order", "high_dose_pct",
               "talk_youtube", "talk_commerce", "reading"]
 
+# NAVER 그룹 -> 논문 검색어. 현준님 데이터(slopindustries/cosmai-ml)의 query 값이다.
+# 엑소좀·펩타이드는 검색어가 없어 빈칸으로 둔다 — 0 으로 채우면 없는 값이 있는
+# 값처럼 보인다.
+PAPER_QUERY = {
+    "PDRN": "polydeoxyribonucleotide",
+    "트라넥삼산": "tranexamic acid",
+    "레티날": "retinol",
+    "시카센텔라": "centella asiatica",
+    "나이아신아마이드": "niacinamide",
+    "히알루론산": "hyaluronic acid",
+    "콜라겐": "collagen",
+    "판테놀": "panthenol",
+}
+PAPER_BASELINE = "cosmetic"      # 색인 자체의 성장률. 이걸로 나눠야 비교가 된다
+PAPER_GAP = 0.3                  # 두 색인 보정 배수가 이만큼 벌어지면 진짜 이견
+
 
 def read(path: Path) -> list[dict]:
+    """`#` 주석 줄은 건너뛴다. 현준님 CSV 는 머리에 주의사항이 붙어 있다."""
     with path.open(encoding="utf-8-sig", newline="") as handle:
-        return list(csv.DictReader(handle))
+        return list(csv.DictReader([l for l in handle if not l.startswith("#")]))
+
+
+def paper_growth(rows: list[dict]) -> dict[str, dict]:
+    """검색어 -> 소스별 **보정 배수**. 원본 배수를 그대로 쓰면 안 된다.
+
+    두 색인의 성장률이 다르다 — Europe PMC 는 프리프린트를 포함해 전체가 2.10배
+    커졌고 PubMed 는 1.44배다. 그래서 어떤 성분이든 EPMC 쪽 배수가 크게 나온다.
+    `cosmetic` 검색어로 나누면 색인 성장이 상쇄되고 **두 소스가 사실상 일치한다**
+    (실측으로 표본 충분한 10개의 차이 평균 0.083 · 최대 0.363).
+
+    NAVER 의 `기준_세럼`, 우리 `composition` 과 같은 방식이다.
+
+    `ratio_usable` 이 False 면 2019 기준선이 월 5편 미만이라 배수가 잡음이다.
+    현준님이 표시해 두셨고 30행 중 8행이 걸린다. 그대로 존중한다.
+    """
+    by = {(r["query"], r["source"]): r for r in rows}
+    base = {}
+    for source in {r["source"] for r in rows}:
+        anchor = by.get((PAPER_BASELINE, source))
+        if anchor:
+            base[source] = float(anchor["growth"])
+    out: dict[str, dict] = defaultdict(dict)
+    for (query, source), row in by.items():
+        if query == PAPER_BASELINE or source not in base:
+            continue
+        out[query][source] = {
+            "growth": float(row["growth"]) / base[source],
+            "usable": row.get("ratio_usable") == "True",
+        }
+    return out
 
 
 def naver_series(rows: list[dict], source: str) -> dict[str, list[tuple[str, float]]]:
@@ -157,7 +205,8 @@ def topic_table(naver: list[dict], trend: list[dict],
 
 
 def ingredient_table(naver: list[dict], formula: list[dict],
-                     youtube: list[str], commerce: list[str]) -> list[dict]:
+                     youtube: list[str], commerce: list[str],
+                     papers: dict[str, dict]) -> list[dict]:
     index = naver_index(naver)
     n_rank = ranks({g: v[0] for g, v in index.items()})
 
@@ -186,7 +235,19 @@ def ingredient_table(naver: list[dict], formula: list[dict],
         talk_y = count_terms(youtube, terms)
         talk_c = count_terms(commerce, terms)
 
+        paper = papers.get(PAPER_QUERY.get(group, ""), {})
+        epmc, pubmed = paper.get("europepmc", {}), paper.get("pubmed", {})
+        usable = bool(epmc.get("usable")) and bool(pubmed.get("usable"))
+
         reading = []
+        if epmc and pubmed and usable:
+            gap = abs(epmc["growth"] - pubmed["growth"])
+            if gap > PAPER_GAP:
+                reading.append("두 색인이 갈린다 — 한쪽만 보고 결론 내지 말 것")
+            elif epmc["growth"] < 0.9 and pubmed["growth"] < 0.9:
+                reading.append("논문은 화장품 분야 평균보다 뒤처짐")
+        elif epmc:
+            reading.append("논문 표본 부족 — 배수를 쓰면 안 됨")
         if growth >= 20 and len(names) <= 5:
             reading.append("검색 급증인데 선케어 처방에 없음 — 카테고리 밖 성분")
         elif len(names) / total > 0.3 and high < 10:
@@ -198,6 +259,9 @@ def ingredient_table(naver: list[dict], formula: list[dict],
             "naver_index_recent": round(recent, 2),
             "naver_growth_x": ("∞" if growth == float("inf") else round(growth, 1)),
             "naver_rank": n_rank.get(group, 0),
+            "paper_epmc": (round(epmc["growth"], 2) if epmc else ""),
+            "paper_pubmed": (round(pubmed["growth"], 2) if pubmed else ""),
+            "paper_usable": ("" if not epmc else ("true" if usable else "false")),
             "formula_products": len(names),
             "formula_pct": round(100 * len(names) / total, 1),
             "median_order": median if median is not None else "",
@@ -210,12 +274,15 @@ def ingredient_table(naver: list[dict], formula: list[dict],
 
 
 def run(naver_csv: Path, trend_csv: Path, formula_csv: Path,
-        yt_csv: Path, cm_csv: Path, out: Path) -> int:
+        yt_csv: Path, cm_csv: Path, paper_csv: Path, out: Path) -> int:
     naver = read(naver_csv)
     trend = read(trend_csv)
     formula = read(formula_csv)
     youtube = [r["text"] for r in read(yt_csv)]
     commerce = [r["text"] for r in read(cm_csv)]
+    papers = paper_growth(read(paper_csv)) if paper_csv.exists() else {}
+    if not papers:
+        print(f"[경고] 논문 데이터가 없다: {paper_csv}. 성분 표의 그 칸이 빈다")
     print(f"NAVER {len(naver):,} · 지표 {len(trend):,} · 성분표 {len(formula):,} · "
           f"유튜브 청크 {len(youtube):,} · 리뷰 청크 {len(commerce):,}")
 
@@ -233,16 +300,18 @@ def run(naver_csv: Path, trend_csv: Path, formula_csv: Path,
         if r["reading"]:
             print(f"    {r['naver_group']} — {r['reading']}")
 
-    ing = ingredient_table(naver, formula, youtube, commerce)
+    ing = ingredient_table(naver, formula, youtube, commerce, papers)
     print()
-    print("=== 성분 축 — NAVER 검색 vs 선케어 처방 vs 담론 ===")
-    print(f"{'성분':<16}{'검색지수':>9}{'증가':>7}{'제품':>6}{'비율':>7}"
-          f"{'배합순위':>9}{'고함량%':>8}{'영상·댓글':>9}{'리뷰':>6}")
+    print("=== 성분 축 — 논문(보정) · NAVER 검색 · 선케어 처방 · 담론 ===")
+    print(f"{'성분':<16}{'EPMC':>7}{'PubMed':>8}{'검색':>8}{'제품':>6}{'비율':>7}"
+          f"{'배합순위':>9}{'고함량':>7}{'담론':>8}")
     for r in ing:
-        print(f"{r['ingredient']:<16}{r['naver_index_recent']:>9.2f}"
-              f"{str(r['naver_growth_x'])+'x':>7}{r['formula_products']:>6}"
-              f"{r['formula_pct']:>6.1f}%{str(r['median_order'] or '—'):>9}"
-              f"{r['high_dose_pct']:>7.0f}%{r['talk_youtube']:>9,}{r['talk_commerce']:>6,}")
+        epmc = f"{r['paper_epmc']:>7}" if r["paper_epmc"] != "" else f"{'-':>7}"
+        pm = f"{r['paper_pubmed']:>8}" if r["paper_pubmed"] != "" else f"{'-':>8}"
+        print(f"{r['ingredient']:<16}{epmc}{pm}"
+              f"{str(r['naver_growth_x'])+'x':>8}{r['formula_products']:>6}"
+              f"{r['formula_pct']:>6.1f}%{str(r['median_order'] or '-'):>9}"
+              f"{r['high_dose_pct']:>6.0f}%{r['talk_youtube']:>8,}")
     print()
     for r in ing:
         if r["reading"]:
@@ -283,6 +352,22 @@ def demo() -> None:
     assert abs(idx["PDRN"][0] - 0.25) < 1e-9, idx        # (0.1+0.4)/2
     assert abs(idx["PDRN"][1] - 1.0) < 1e-9, idx         # 표본이 12 미만이면 같은 창
 
+    # 논문 배수는 색인 성장률로 나눠야 비교가 된다
+    pg = paper_growth([
+        {"query": "cosmetic", "source": "europepmc", "growth": "2.0",
+         "ratio_usable": "True"},
+        {"query": "cosmetic", "source": "pubmed", "growth": "1.0",
+         "ratio_usable": "True"},
+        {"query": "x", "source": "europepmc", "growth": "4.0",
+         "ratio_usable": "True"},
+        {"query": "x", "source": "pubmed", "growth": "2.0",
+         "ratio_usable": "False"},
+    ])
+    assert "cosmetic" not in pg, "기준선 자신은 성분이 아니다"
+    assert pg["x"]["europepmc"]["growth"] == 2.0        # 4.0 / 2.0
+    assert pg["x"]["pubmed"]["growth"] == 2.0           # 2.0 / 1.0 — 보정하면 일치
+    assert pg["x"]["pubmed"]["usable"] is False, "표본 부족 표시를 존중해야 한다"
+
     # 눈시림과 따가움이 같은 주제로 가지만 행은 따로 남아야 한다
     topics = [t for _g, t, _x in TOPIC_ROWS]
     assert topics.count("자극_눈시림") == 2
@@ -300,13 +385,16 @@ def main() -> int:
                    default=Path("data/external/product_ingredient_function_repaired.csv"))
     p.add_argument("--youtube", type=Path, default=Path("reports/chunks_youtube.csv"))
     p.add_argument("--commerce", type=Path, default=Path("reports/chunks_commerce.csv"))
+    p.add_argument("--papers", type=Path,
+                   default=Path("data/external/paper_growth.csv"))
     p.add_argument("--out", type=Path, default=Path("reports/cross_source.csv"))
     p.add_argument("--demo", action="store_true")
     a = p.parse_args()
     if a.demo:
         demo()
         return 0
-    return run(a.naver, a.trend, a.formula, a.youtube, a.commerce, a.out)
+    return run(a.naver, a.trend, a.formula, a.youtube, a.commerce, a.papers,
+               a.out)
 
 
 if __name__ == "__main__":

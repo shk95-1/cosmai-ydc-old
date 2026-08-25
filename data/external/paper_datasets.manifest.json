@@ -1,0 +1,16 @@
+{
+  "paper_trend.csv": {
+    "sha256": "ae1747a10befb83a7eeda01fb501770efc300db81a6ba3b5e46af6507089a36e",
+    "bytes": 104515,
+    "rows": 2760
+  },
+  "paper_growth.csv": {
+    "sha256": "033eb87c5f65fb7eca134f2f49f73481228c3c223b46e3e34ac5ac676e28084b",
+    "bytes": 2957,
+    "rows": 30
+  },
+  "origin": "현준님 — slopindustries/cosmai-ml datasets/papers (org read)",
+  "received": "2026-08-25",
+  "note": "PubMed 와 Europe PMC 는 세는 대상이 다르다. 절대값을 합치거나 이어붙이지 않는다. 최근 2~3개월은 색인 지연으로 과소집계된다. ratio_usable=False 는 2019 기준선이 월 5편 미만이라 배수를 쓰면 안 되는 행이다(30행 중 8행).",
+  "baseline": "검색어 cosmetic 이 기준선이다. 색인 자체의 성장률(EPMC 2.10x · PubMed 1.44x)을 나눠야 성분 배수를 비교할 수 있다. 보정하면 두 소스 차이가 평균 0.083 로 좁혀진다."
+}
