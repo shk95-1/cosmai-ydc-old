@@ -72,10 +72,14 @@ ING_FIELDS = ["ingredient", "naver_index_recent", "naver_growth_x", "naver_rank"
 # NAVER 그룹 -> 논문 검색어. 현준님 데이터(slopindustries/cosmai-ml)의 query 값이다.
 # 엑소좀·펩타이드는 검색어가 없어 빈칸으로 둔다 — 0 으로 채우면 없는 값이 있는
 # 값처럼 보인다.
+# `레티날` 은 `retinaldehyde` 다. `retinol` 이 아니다 — 현준님이 갈라 주셨다.
+# 다만 성분표 쪽 `INGREDIENT_KEYS` 는 레티놀까지 세는데, 그건 제품 수를 후하게
+# 잡는 방향이라 "처방에 거의 없다" 는 결론을 약하게 만들 뿐 뒤집지 않는다.
 PAPER_QUERY = {
     "PDRN": "polydeoxyribonucleotide",
+    "엑소좀": "exosome",
     "트라넥삼산": "tranexamic acid",
-    "레티날": "retinol",
+    "레티날": "retinaldehyde",
     "시카센텔라": "centella asiatica",
     "나이아신아마이드": "niacinamide",
     "히알루론산": "hyaluronic acid",

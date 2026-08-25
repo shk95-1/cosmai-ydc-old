@@ -222,6 +222,9 @@ def run(incoming: Path, chunks: Path, base: Path, out: Path, skip_probe: bool) -
             {"owner": "시현", "count": len(our_ids)},
             {"owner": their_manifest.get("source_owner", "?"), "count": len(add_ids),
              "weight_sha256_16": theirs,
+             # **어느 판의 청크로 만든 벡터인가.** 수호님이 이걸 쓰라고 넣어 주셨다.
+             # 텍스트가 바뀌면 값이 바뀌므로 1차·2차를 구분할 수 있는 유일한 표식이다
+             "chunk_text_sha256_16": their_manifest.get("chunk_text_sha256_16"),
              "verified_cosine_min": None if skip_probe else round(min(cosines), 6),
              "reencoded_for_normalization": len(stale)},
         ],
