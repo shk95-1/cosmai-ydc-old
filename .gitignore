@@ -46,3 +46,4 @@ reports/retrieval_eval_*.csv
 reports/naver_trend.csv
 .cache/naver_datalab.json
 reports/retrieval_eval_*_all.csv
+reports/cross_source*.csv
