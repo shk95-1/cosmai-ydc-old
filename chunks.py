@@ -160,6 +160,9 @@ def check_rows(rows: list[dict]) -> tuple[list[str], Counter, list[int], int]:
         # 정규화 규칙이 갈리면 소스 간 비교가 무의미해진다. 팀 합의 사항이다
         if text != normalize_text(text):
             note(f"정규화 안 됨: {line}행 {chunk_id}")
+        # 하드스톱은 2배다. 500 은 목표치고 조금 넘는 건 위반으로 세우지 않는다.
+        # 대신 validate() 가 `lengths` 로 몇 건인지 따로 센다 — 그러지 않으면
+        # "[통과]" 가 "500 위반 없음" 으로 읽힌다 (수호님 청크 27건이 그렇게 묻혔다)
         if len(text) > MAX_CHARS * 2:
             note(f"너무 긺: {line}행 {chunk_id} — {len(text)}자")
 
@@ -196,6 +199,12 @@ def validate(path: Path) -> int:
     if lengths:
         lengths.sort()
         print(f"청크 길이 중앙 {lengths[len(lengths) // 2]}자 · 최대 {lengths[-1]}자")
+        # 위반은 아니지만 묻히면 안 된다. 하드스톱(1000)만 보면 562자가 통과로 보인다
+        over = [l for l in lengths if l > MAX_CHARS]
+        if over:
+            print(f"[주의] 목표 상한 {MAX_CHARS}자 초과 {len(over)}건 "
+                  f"(최대 {over[-1]}자). 하드스톱 {MAX_CHARS * 2}자는 안 넘어 통과지만 "
+                  f"생성기 쪽에서 고쳐야 한다")
     print()
     if problems:
         print(f"[실패] 계약 위반 {len(problems)}종")
