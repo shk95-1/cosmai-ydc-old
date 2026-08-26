@@ -157,6 +157,34 @@ def is_korean(text: str) -> bool:
     return len(HANGUL_RE.findall(text)) / len(text) > 0.05
 
 
+STOPWORDS_FILE = Path("seeds/stopwords_ko.txt")
+
+
+def query_stopwords() -> frozenset[str]:
+    """**질의에만** 적용하는 불용어. 색인에는 손대지 않는다.
+
+    자연어로 물으면 필러가 끌고 간다 — `백탁 관련해서 소비자들이` 가
+    `['관련','백탁','소비자']` 로 쪼개지고 *"후니는 우리 소비자편이야"* 가 3위에
+    올라온다(수호님 발견). 색인에서 빼면 `소비자` 를 직접 찾는 질의를 못 하게 되니
+    **질의 쪽만** 지운다.
+
+    별칭 61개 중 이 목록과 겹치는 것은 **0개**라 기존 평가 숫자는 안 움직인다.
+    질의가 전부 불용어면(예: `관련`) 지우지 않는다 — 빈 질의보다는 낫다.
+    """
+    if not STOPWORDS_FILE.exists():
+        return frozenset()
+    return frozenset(
+        l.strip() for l in STOPWORDS_FILE.read_text(encoding="utf-8").splitlines()
+        if l.strip() and not l.startswith("#"))
+
+
+def tokenize_query(text: str) -> list[str]:
+    """질의 토큰화. `tokenize` 에 불용어 제거만 얹는다."""
+    toks = tokenize(text)
+    kept = [t for t in toks if t not in query_stopwords()]
+    return kept or toks          # 전부 불용어면 원본을 쓴다
+
+
 def tokenize(text: str) -> list[str]:
     """언어로 갈린다. 두 갈래 모두 소문자 NFKC 를 거쳐 같은 표면형을 만든다."""
     text = unicodedata.normalize("NFKC", text or "")
@@ -262,7 +290,9 @@ class Index:
         """
         banned = {self.position[d] for d in (skip or ()) if d in self.position}
         scores: dict[int, float] = defaultdict(float)
-        for term in set(tokenize(query)):
+        # **질의는 `tokenize_query`.** 색인은 `tokenize` 그대로다 — 필러를 색인에서
+        # 빼면 `소비자` 를 직접 찾는 질의를 못 하게 된다
+        for term in set(tokenize_query(query)):
             weight = self.idf(term)
             if weight == 0.0:
                 continue
@@ -511,7 +541,9 @@ def main() -> int:
                           None if a.no_cache else Path(a.cache), chunks)
     print(f"색인 {index.n:,}개 문서 · 고유 토큰 {len(index.postings):,} · "
           f"평균 길이 {index.avg_len:.1f}")
-    print(f"질의 토큰: {sorted(set(tokenize(a.query)))}")
+    toks = sorted(set(tokenize_query(a.query)))
+    dropped = sorted(set(tokenize(a.query)) - set(toks))
+    print(f"질의 토큰: {toks}" + (f"  (불용어로 뺀 것: {dropped})" if dropped else ""))
     print()
 
     if a.per_source:
