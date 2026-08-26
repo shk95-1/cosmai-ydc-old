@@ -14,7 +14,7 @@
   --line:#DFE4EB; --line2:#EDF0F4;
   --ink:#111418; --ink2:#586474; --ink3:#8A94A3;
   --uv:#5B3FD6; --uv-soft:#EFEBFD;
-  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#a06a00; --s5:#e87ba4; --s6:#4a3aa7;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#a06a00;
   --good:#12855c; --warn:#a06a00; --bad:#c53b3a;
   --shadow:0 1px 2px rgba(17,20,24,.04),0 8px 24px -12px rgba(17,20,24,.10);
 }
@@ -24,7 +24,7 @@
   --line:#2A313C; --line2:#222932;
   --ink:#EDF0F4; --ink2:#9AA5B4; --ink3:#6B7686;
   --uv:#9C87F5; --uv-soft:#221C3C;
-  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#9085e9;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
   --good:#199e70; --warn:#c98500; --bad:#e66767;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px -12px rgba(0,0,0,.6);
 }}
@@ -34,7 +34,7 @@
   --line:#2A313C; --line2:#222932;
   --ink:#EDF0F4; --ink2:#9AA5B4; --ink3:#6B7686;
   --uv:#9C87F5; --uv-soft:#221C3C;
-  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#9085e9;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
   --good:#199e70; --warn:#c98500; --bad:#e66767;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px -12px rgba(0,0,0,.6);
 }
@@ -45,6 +45,7 @@ body{margin:0;background:var(--ground);color:var(--ink);
 .mono{font-family:"IBM Plex Mono","IBM Plex Sans KR",ui-monospace,monospace;
   font-variant-numeric:tabular-nums}
 .wrap{max-width:1080px;margin:0 auto;padding:0 22px 80px}
+svg{display:block;width:100%;height:auto;overflow:visible}
 
 header{padding:38px 0 0}
 .eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.14em;
@@ -52,16 +53,15 @@ header{padding:38px 0 0}
 h1{font-size:30px;line-height:1.15;font-weight:700;margin:0 0 8px;letter-spacing:-.025em}
 .lede{font-size:14.5px;color:var(--ink2);margin:0 0 22px;font-weight:300;max-width:64ch}
 .lede b{color:var(--ink);font-weight:600}
-
 .status{display:inline-flex;align-items:center;gap:8px;font-family:"IBM Plex Mono",monospace;
   font-size:11.5px;padding:5px 11px;border-radius:20px;background:var(--sunk);
   color:var(--ink2);margin:0 0 22px}
 .dot{width:7px;height:7px;border-radius:50%;background:var(--warn);flex:none}
 .dot.on{background:var(--good)} .dot.err{background:var(--bad)}
 
-nav{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:0 0 26px}
+nav{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:0 0 26px;flex-wrap:wrap}
 nav button{appearance:none;background:none;border:0;border-bottom:2px solid transparent;
-  padding:10px 16px;font:inherit;font-size:14px;font-weight:500;color:var(--ink3);
+  padding:10px 15px;font:inherit;font-size:14px;font-weight:500;color:var(--ink3);
   cursor:pointer;margin-bottom:-1px}
 nav button:hover{color:var(--ink2)}
 nav button[aria-selected="true"]{color:var(--uv);border-bottom-color:var(--uv)}
@@ -75,13 +75,13 @@ button.go{padding:11px 20px;font:inherit;font-weight:600;background:var(--uv);co
   border:0;border-radius:4px;cursor:pointer}
 button.go:disabled{opacity:.5;cursor:default}
 label.chk{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--ink2)}
-.samples{margin:0 0 26px}
-.sgroup{margin:0 0 12px}
+.samples{margin:0 0 22px}
+.sgroup{margin:0 0 11px}
 .slabel{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.06em;
   text-transform:uppercase;color:var(--ink3);margin:0 0 5px;display:flex;gap:9px;
   align-items:baseline;flex-wrap:wrap}
-.slabel span{font-family:"IBM Plex Sans KR",sans-serif;font-size:11.5px;
-  letter-spacing:0;text-transform:none;color:var(--ink3);font-weight:300}
+.slabel span{font-family:"IBM Plex Sans KR",sans-serif;font-size:11.5px;letter-spacing:0;
+  text-transform:none;color:var(--ink3);font-weight:300}
 .srow{display:flex;flex-wrap:wrap;gap:6px}
 .samples button{appearance:none;background:var(--sunk);border:1px solid var(--line);
   color:var(--ink2);font:inherit;font-size:12.5px;padding:4px 10px;border-radius:14px;cursor:pointer}
@@ -89,7 +89,9 @@ label.chk{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:va
 
 .p{background:var(--panel);border:1px solid var(--line);border-radius:5px;
   padding:18px 20px;box-shadow:var(--shadow);margin:0 0 16px}
-h2{font-size:15px;font-weight:600;margin:0 0 12px;letter-spacing:-.01em}
+h2{font-size:16px;font-weight:600;margin:0 0 4px;letter-spacing:-.01em}
+.sub{font-size:13px;color:var(--ink2);font-weight:300;margin:0 0 18px;max-width:66ch}
+.sub b{color:var(--ink);font-weight:600}
 h3{font-size:13px;font-weight:600;margin:16px 0 8px;color:var(--ink2)}
 .route{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px}
 .badge{font-family:"IBM Plex Mono",monospace;font-size:12px;font-weight:600;
@@ -98,22 +100,22 @@ h3{font-size:13px;font-weight:600;margin:16px 0 8px;color:var(--ink2)}
 .reason{font-size:13px;color:var(--ink2);font-weight:300;margin:0}
 .reason b{color:var(--ink);font-weight:600}
 
-.ev{border-left:2px solid var(--line);padding:0 0 0 14px;margin:0 0 14px}
-.ev .src{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--ink3);
-  letter-spacing:.04em;margin:0 0 6px}
-.ev .row{padding:9px 0;border-bottom:1px solid var(--line2)}
+.ev{border-left:2px solid var(--line);padding:0 0 0 13px;margin:0 0 12px}
+.ev .src{font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--ink3);
+  letter-spacing:.04em;margin:0 0 5px}
+.ev .row{padding:6px 0;border-bottom:1px solid var(--line2)}
 .ev .row:last-child{border-bottom:0}
-.ev .id{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--uv);
-  word-break:break-all;display:block;margin-bottom:3px}
-.ev .tx{font-size:13.5px;color:var(--ink);font-weight:300}
-.ev .sc{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--ink3);float:right}
+.ev .id{font-family:"IBM Plex Mono",monospace;font-size:10px;color:var(--ink3);
+  word-break:break-all;display:block}
+.ev .tx{font-size:12.5px;color:var(--ink2);font-weight:300}
+.ev .sc{font-family:"IBM Plex Mono",monospace;font-size:10px;color:var(--ink3);float:right}
 
 .tw{overflow-x:auto}
 table{border-collapse:collapse;width:100%;font-size:13px;min-width:320px}
 th{text-align:left;font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.08em;
   text-transform:uppercase;color:var(--ink3);font-weight:500;padding:0 12px 7px 0;
-  border-bottom:1px solid var(--line);white-space:nowrap}
-td{padding:7px 12px 7px 0;border-bottom:1px solid var(--line2);vertical-align:top}
+  border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:bottom}
+td{padding:8px 12px 8px 0;border-bottom:1px solid var(--line2);vertical-align:top}
 td.n{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;text-align:right;
   padding-right:14px;white-space:nowrap}
 tr:last-child td{border-bottom:0}
@@ -132,35 +134,71 @@ details{margin:14px 0 0}
 summary{cursor:pointer;font-size:12.5px;color:var(--ink2);font-weight:500}
 summary:focus-visible{outline:2px solid var(--uv);outline-offset:2px;border-radius:3px}
 
-.cards{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(310px,1fr))}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:17px 19px;
-  box-shadow:var(--shadow);display:flex;flex-direction:column;gap:9px}
-.card h4{margin:0;font-size:17px;font-weight:600;letter-spacing:-.01em}
-.card .b{font-size:13px;color:var(--ink2);font-weight:300;flex:1}
+.ans{font-size:14.5px}
+.ans h3{font-size:12px;font-weight:600;color:var(--uv);letter-spacing:.04em;
+  text-transform:uppercase;margin:16px 0 6px}
+.ans li{margin:3px 0 3px 18px;font-size:13.5px;color:var(--ink2);font-weight:300;list-style:disc}
+
+/* ── 카드 ─────────────────────────────── */
+.cards{display:grid;gap:16px;grid-template-columns:repeat(auto-fill,minmax(330px,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:18px 20px;
+  box-shadow:var(--shadow);display:flex;flex-direction:column;gap:10px}
+.card h4{margin:0;font-size:18px;font-weight:600;letter-spacing:-.01em}
+.card .b{font-size:12.5px;color:var(--ink2);font-weight:300}
 .chip{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:10.5px;
   padding:2px 7px;border-radius:3px;background:var(--sunk);color:var(--ink2);font-weight:500}
 .chip.uv{background:var(--uv-soft);color:var(--uv)}
 .chip.g{background:color-mix(in srgb,var(--good) 14%,transparent);color:var(--good)}
-.card ul{margin:0;padding-left:16px;font-size:12px;color:var(--ink2);font-weight:300}
 .card .r{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
-blockquote{margin:0;padding:8px 0 8px 12px;border-left:2px solid var(--line);
-  font-size:12.5px;color:var(--ink2);font-weight:300}
-blockquote a{color:var(--uv);font-size:11px;font-family:"IBM Plex Mono",monospace}
+.card ul{margin:0;padding-left:16px;font-size:12px;color:var(--ink2);font-weight:300}
+.use{background:var(--uv-soft);border-radius:4px;padding:11px 14px;font-size:13px;
+  color:var(--ink);line-height:1.6}
+.use .k{display:block;font-family:"IBM Plex Mono",monospace;font-size:10px;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--uv);margin-bottom:4px}
+.kv{display:grid;grid-template-columns:1fr auto;gap:2px 12px;font-size:12.5px}
+.kv dt{color:var(--ink3);font-weight:300}
+.kv dd{margin:0;font-family:"IBM Plex Mono",monospace;font-weight:600;
+  font-variant-numeric:tabular-nums;text-align:right}
+blockquote{margin:0;padding:6px 0 6px 11px;border-left:2px solid var(--line2);
+  font-size:11.5px;color:var(--ink3);font-weight:300}
+blockquote a{color:var(--uv);font-size:10px;font-family:"IBM Plex Mono",monospace}
 
-.metrics{display:grid;gap:2px;background:var(--line);border:1px solid var(--line);
-  border-radius:5px;overflow:hidden}
-.metrics div{background:var(--panel);padding:14px 18px;display:grid;
-  grid-template-columns:1fr auto;gap:4px 16px;align-items:baseline}
-.metrics .k{font-size:14px;font-weight:600}
-.metrics .v{font-family:"IBM Plex Mono",monospace;font-size:18px;font-weight:600;
-  color:var(--uv);white-space:nowrap}
-.metrics .n{grid-column:1/-1;font-size:12.5px;color:var(--ink2);font-weight:300}
-.metrics .n b{color:var(--ink);font-weight:600}
+/* ── 지표 ─────────────────────────────── */
+.mrow{background:var(--panel);border:1px solid var(--line);border-radius:5px;
+  box-shadow:var(--shadow);margin:0 0 14px;overflow:hidden}
+.mhead{display:flex;align-items:baseline;gap:12px;padding:15px 20px 13px;flex-wrap:wrap}
+.mhead .g{font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink3);background:var(--sunk);padding:2px 7px;
+  border-radius:3px}
+.mhead .k{font-size:15px;font-weight:600;flex:1;min-width:140px}
+.mhead .v{font-family:"IBM Plex Mono",monospace;font-size:22px;font-weight:600;
+  color:var(--uv);white-space:nowrap;letter-spacing:-.02em}
+.mbody{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line)}
+@media(max-width:760px){.mbody{grid-template-columns:1fr}}
+.mcell{background:var(--panel);padding:13px 20px}
+.mcell .t{font-family:"IBM Plex Mono",monospace;font-size:9.5px;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--ink3);margin:0 0 5px}
+.mcell.lim .t{color:var(--warn)}
+.mcell p{margin:0;font-size:12.5px;color:var(--ink2);font-weight:300;line-height:1.65}
+.mcell p b{color:var(--ink);font-weight:600}
+.mchart{background:var(--panel);padding:6px 20px 16px;border-top:1px solid var(--line)}
 
-.ans{font-size:14.5px}
-.ans h3{font-size:13px;font-weight:600;color:var(--uv);letter-spacing:.02em}
-.ans li{margin:3px 0 3px 18px;font-size:13.5px;color:var(--ink2);font-weight:300;
-  list-style:disc}
+/* ── 범위 ─────────────────────────────── */
+.tier{background:var(--panel);border:1px solid var(--line);border-radius:5px;
+  box-shadow:var(--shadow);margin:0 0 14px;padding:16px 20px}
+.tier .h{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:0 0 6px}
+.tier .num{font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:600;
+  width:22px;height:22px;border-radius:50%;display:grid;place-items:center;flex:none;
+  background:var(--uv-soft);color:var(--uv)}
+.tier .kind{font-size:15px;font-weight:600}
+.tier .cnt{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--ink3)}
+.tier .note{font-size:12.5px;color:var(--ink2);font-weight:300;margin:0 0 12px}
+.tier .note b{color:var(--ink);font-weight:600}
+.tier.t1{border-left:3px solid var(--bad)}
+.tier.t2{border-left:3px solid var(--warn)}
+.tier.t3{border-left:3px solid var(--s1)}
+.tier.t4{border-left:3px solid var(--good)}
+
 .muted{color:var(--ink3);font-size:13px;font-weight:300}
 footer{margin-top:44px;padding-top:20px;border-top:1px solid var(--line);
   color:var(--ink3);font-size:12px;font-weight:300}
@@ -170,10 +208,11 @@ footer{margin-top:44px;padding-top:20px;border-top:1px solid var(--line);
 <body>
 <div class="wrap">
 <header>
-  <p class="eyebrow">COSMAI · 선크림 트렌드 PoC</p>
+  <p class="eyebrow">COSMAI · 선크림 트렌드 PoC · 2026.08.27</p>
   <h1>근거 탐색기</h1>
-  <p class="lede">질의 유형에 맞는 검색기로 찾고 <b>원문 근거를 그대로</b> 보여줍니다.
-  결론을 만들지 않습니다 — <b>사람이 근거를 읽는 것</b>이 기본입니다.</p>
+  <p class="lede">질의 유형에 맞는 검색기로 찾고 <b>원문 근거</b>로 답합니다.
+  결론을 만들지 않습니다 — 규칙이 후보를 정하고 검색이 근거를 찾고, LLM 은 그 근거를
+  <b>핵심만</b> 묶습니다.</p>
   <div class="status" id="status"><span class="dot"></span><span id="statusText">색인 로딩 중…</span></div>
 </header>
 
@@ -181,50 +220,41 @@ footer{margin-top:44px;padding-top:20px;border-top:1px solid var(--line);
   <button role="tab" id="t-ask" aria-selected="true" aria-controls="v-ask">질의</button>
   <button role="tab" id="t-cards" aria-selected="false" aria-controls="v-cards">Opportunity Card</button>
   <button role="tab" id="t-metrics" aria-selected="false" aria-controls="v-metrics">지표와 한계</button>
+  <button role="tab" id="t-scope" aria-selected="false" aria-controls="v-scope">답변 가능 범위</button>
 </nav>
 
 <main>
 <section id="v-ask" role="tabpanel" aria-labelledby="t-ask">
   <form id="askForm">
-    <input type="text" id="q" placeholder="예: 판테놀 쓰는 선크림" autocomplete="off"
-           aria-label="질의">
-    <label class="chk"><input type="checkbox" id="gen"> LLM 답변 생성</label>
+    <input type="text" id="q" placeholder="예: 판테놀 쓰는 선크림" autocomplete="off" aria-label="질의">
+    <label class="chk"><input type="checkbox" id="gen" checked> LLM 답변 생성</label>
     <button class="go" type="submit" id="goBtn">찾기</button>
   </form>
   <div class="samples" id="samples"></div>
-  <details class="p" style="padding:14px 18px">
-    <summary>못 답하거나 <b>일부러 거부</b>하는 질문</summary>
-    <div class="tw" style="margin-top:12px"><table><tbody>
-      <tr><td>"이 성분 넣으면 매출 오를까"</td><td class="muted">판매량 데이터가 없습니다</td></tr>
-      <tr><td>없는 성분 물어보기</td><td class="muted">df=0 으로 잡아 거부합니다. <b>의도된 동작</b>입니다</td></tr>
-      <tr><td>"이 성분 효과 있어"</td><td class="muted">식약처 <b>등록</b>과 <b>효과 입증</b>은 다릅니다. 등록 사실만 말합니다</td></tr>
-      <tr><td>"이 성분 때문에 이 반응이 생겼어"</td><td class="muted">인과를 단정하지 않습니다. "~라는 언급이 있었다" 까지입니다</td></tr>
-      <tr><td>"다음 분기에 뭐가 뜰까"</td><td class="muted">예측 모델이 없습니다. 후향 검증 22% · 기저율 47%</td></tr>
-      <tr><td>논문·연구 동향</td><td class="muted">검색어가 화장품을 세지 않아 축 전체를 중지했습니다</td></tr>
-    </tbody></table></div>
-  </details>
   <div id="result"></div>
 </section>
 
 <section id="v-cards" role="tabpanel" aria-labelledby="t-cards" hidden>
-  <div class="p" style="padding:14px 18px">
-    <p class="muted" style="margin:0"><b>유형은 규칙이 배정했습니다.</b> LLM 이
-    "이건 기회야"라고 판단하지 않습니다. 수치는 저장된 산출물에서 그대로 가져오고
-    카드마다 <b>한계</b>가 붙습니다.</p>
-  </div>
+  <h2>Opportunity Card 6장</h2>
+  <p class="sub"><b>유형은 규칙이 배정했습니다.</b> LLM 이 판단하지 않습니다. 수치는
+  저장된 산출물에서 그대로 가져왔고 카드마다 <b>활용 방안</b>과 <b>한계</b>가 붙습니다.
+  <br>주제 축 3장은 소스 간 구성비 차이, 성분 축 3장은 수요와 처방의 어긋남을 봅니다.</p>
   <div class="cards" id="cardsBox"><p class="muted">불러오는 중…</p></div>
 </section>
 
 <section id="v-metrics" role="tabpanel" aria-labelledby="t-metrics" hidden>
-  <div class="metrics" id="metricsBox"></div>
-  <div class="limits" style="margin-top:18px">
-    <p><b>이 도구로 하면 안 되는 것</b></p>
-    <p>· 미래 예측 — 후향 검증에서 상승 지속 적중률 22%, 기저율 47%입니다</p>
-    <p>· 소스 간 점수 비교 — BM25 와 코사인은 척도가 다릅니다</p>
-    <p>· 시점 필터 결과를 "트렌드 상승"으로 읽기 — 최근 N일 등록 목록일 뿐입니다</p>
-    <p>· 논문·연구 동향 인용 — 검색어가 화장품을 세지 않아 축 전체를 중지했습니다</p>
-    <p>· 식약처 등록을 효과 보증으로 읽기 — 보고는 효과 입증이 아닙니다</p>
-  </div>
+  <h2>지표와 한계</h2>
+  <p class="sub">지표마다 <b>값 · 측정 방법 · 한계</b>를 나눠 적었습니다.
+  값만 보고 읽으면 틀리는 숫자가 있어서입니다.</p>
+  <div id="metricsBox"><p class="muted">불러오는 중…</p></div>
+</section>
+
+<section id="v-scope" role="tabpanel" aria-labelledby="t-scope" hidden>
+  <h2>답변 가능 범위 — 실측</h2>
+  <p class="sub">문서 주장이 아니라 <b>같은 질의를 실제로 돌려 본 결과</b>입니다
+  (2026-08-27 · 벡터 포함). <b>거부는 대부분 검색이 아니라 프롬프트가 합니다</b> —
+  코드가 막는 것은 한 갈래뿐입니다.</p>
+  <div id="scopeBox"><p class="muted">불러오는 중…</p></div>
 </section>
 </main>
 
@@ -240,35 +270,85 @@ footer{margin-top:44px;padding-top:20px;border-top:1px solid var(--line);
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fmt = (n) => Number(n).toLocaleString('ko-KR');
+/* `**굵게**` 만 최소로 렌더한다. LLM·데이터 문자열에 HTML 을 넣지 않는다 */
+const bold = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
 
-/* 수호님 `RAG_답변_가능범위.md` 의 네 갈래를 그대로 쓴다.
-   **화면이 답할 수 있는 것을 먼저 가르쳐야** 사람이 헛질문을 안 한다 */
-const SAMPLE_GROUPS = [
-  {label:'정확한 사실 조회', note:'P@10 0.841 — 가장 믿을 수 있다',
-   qs:['보고번호 2018008612', '에칠헥실트리아존 쓰는 선크림', 'SPF50 PA++++ 제품']},
-  {label:'시점 조회', note:'등록일 필터. 목록만 준다 — 트렌드 판정 아님',
-   qs:['최근 나온 무기자차 선크림', '요즘 신제품 뭐 있어']},
-  {label:'소비자 반응', note:'Hit@10 13% — 열 번에 아홉 번은 못 찾는다',
-   qs:['백탁이 심해요', '눈이 시리고 따가워요', '끈적임 심하다는 얘기 있나']},
-  {label:'여러 소스 비교', note:'소스별로 나눠 보여준다. 점수는 안 섞는다',
-   qs:['판테놀 쓰는 선크림', '콜라겐 들어간 제품 뭐가 좋아']},
-  {label:'거부하는 질문', note:'의도된 동작이다',
-   qs:['크소나이드 함유 제품 있어', '다음 분기에 뭐가 뜰까']},
-];
+/* ── 가로 막대 하나 ─────────────────────────
+   차트 헬퍼를 여기 두는 이유: 이 화면은 라이브러리를 안 쓴다(CSP·설치 부담).
+   viz_dashboard.py 와 같은 색 토큰을 써서 두 화면이 한 시스템으로 읽힌다 */
+function hbar(items, o = {}) {
+  const lw = o.labelWidth ?? 116, rw = 66, bh = o.barH ?? 19, gap = 6;
+  const W = 640, H = items.length * (bh + gap) - gap, pw = W - lw - rw;
+  const max = o.max ?? Math.max(...items.map(d => Math.abs(d.v)), 1);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(o.aria || '')}">`;
+  items.forEach((d, i) => {
+    const y = i * (bh + gap);
+    const w = Math.max(2, Math.abs(d.v) / max * pw);
+    const c = d.c ?? o.color ?? 'var(--s1)';
+    s += `<text x="${lw - 8}" y="${y + bh / 2 + 4}" text-anchor="end"
+            style="font-size:11px;fill:var(--ink2)">${esc(d.l)}</text>`;
+    s += `<rect x="${lw}" y="${y}" width="${w}" height="${bh}" rx="3" fill="${c}"/>`;
+    s += `<text x="${lw + w + 7}" y="${y + bh / 2 + 4}"
+            style="font-size:11px;font-family:'IBM Plex Mono',monospace;fill:var(--ink);
+            font-weight:500">${esc(d.txt ?? fmt(d.v))}</text>`;
+  });
+  return s + '</svg>';
+}
+
+/* ── 두 값 비교 막대 (카드용) ───────────────── */
+function pairBar(bars, unit) {
+  const max = Math.max(...bars.map(b => b.v), 1);
+  return hbar(bars.map((b, i) => ({
+    l: b.l ?? b.label, v: b.v,
+    txt: (Math.round(b.v * 10) / 10) + (unit || ''),
+    c: i === 0 ? 'var(--s1)' : 'var(--s2)',
+  })), { max, barH: 20, labelWidth: 96, aria: '비교 막대' });
+}
+
+/* ── 기준선 있는 막대 (지표용) ───────────────── */
+function metricChart(c) {
+  const items = c.labels.map((l, i) => ({
+    l, v: c.values[i],
+    txt: (c.unit === '%' ? c.values[i] + '%'
+          : c.unit === '' ? Number(c.values[i]).toFixed(3)
+          : fmt(c.values[i]) + (c.unit || '')),
+    c: 'var(--s1)',
+  }));
+  /* 기저율 막대는 색을 달리해 비교선으로 읽히게 한다 */
+  items.forEach(it => { if (/기저율/.test(it.l)) it.c = 'var(--bad)'; });
+  return (c.title ? `<p class="mcell t" style="padding:0;margin:10px 0 8px">${esc(c.title)}</p>` : '')
+    + hbar(items, { aria: c.title || '지표 막대' });
+}
+
 const ROUTE_LABEL = {
   bm25: 'BM25 · 어휘 검색', vector: '벡터 · 의미 검색',
   multi_source: 'MULTI SOURCE · 둘 다', temporal_filter: 'TEMPORAL · 날짜 필터',
 };
 
+/* 수호님 `RAG_답변_가능범위.md` 의 갈래 + 실측 보정 */
+const SAMPLE_GROUPS = [
+  {label:'정확한 사실 조회', note:'BM25 · literal P@10 0.841',
+   qs:['보고번호 2018008612', '판테놀 함유', 'SPF50 PA++++ 제품']},
+  {label:'성분 + 자연어', note:'MULTI SOURCE · 소스별로 나란히',
+   qs:['에칠헥실트리아존 쓰는 선크림', '나이아신아마이드 들어간 선크림']},
+  {label:'시점 조회', note:'등록일 필터 · 목록만 (트렌드 판정 아님)',
+   qs:['최근 나온 무기자차 선크림 뭐 있어', '요즘 신제품 뭐 있어']},
+  {label:'소비자 반응', note:'벡터 · heldout Hit@10 13%',
+   qs:['백탁이 심해요', '눈이 시리고 따가운 것 관련 얘기 있어', '끈적임 심하다는 얘기 있나']},
+  {label:'거부·조건부', note:'아래 «답변 가능 범위» 탭 참조',
+   qs:['크소나이드 함유 제품 있어', '다음 분기에 뭐가 뜰까', '판테놀이 효과 있어']},
+];
+
 /* ── 탭 ─────────────────────────────────── */
-const TABS = ['ask', 'cards', 'metrics'];
-TABS.forEach(t => $('#t-'+t).addEventListener('click', () => {
+const TABS = ['ask', 'cards', 'metrics', 'scope'];
+TABS.forEach(t => $('#t-' + t).addEventListener('click', () => {
   TABS.forEach(x => {
-    $('#t-'+x).setAttribute('aria-selected', String(x === t));
-    $('#v-'+x).hidden = x !== t;
+    $('#t-' + x).setAttribute('aria-selected', String(x === t));
+    $('#v-' + x).hidden = x !== t;
   });
   if (t === 'cards') loadCards();
   if (t === 'metrics') loadMetrics();
+  if (t === 'scope') loadScope();
 }));
 
 /* ── 상태 ────────────────────────────────── */
@@ -276,15 +356,10 @@ async function poll() {
   try {
     const s = await (await fetch('/api/status')).json();
     const dot = $('#status .dot'), txt = $('#statusText');
-    if (s.error) {
-      dot.className = 'dot err';
-      txt.textContent = '초기화 실패 — 터미널 로그를 확인하세요';
-      return;
-    }
+    if (s.error) { dot.className = 'dot err'; txt.textContent = '초기화 실패 — 터미널 로그 확인'; return; }
     if (s.ready) {
       dot.className = 'dot on';
-      txt.textContent = s.vectors
-        ? '준비됨 · BM25 + 벡터'
+      txt.textContent = s.vectors ? '준비됨 · BM25 + 벡터'
         : '준비됨 · BM25 만 (벡터는 --vectors 로 켭니다)';
       $('#goBtn').disabled = false;
       return;
@@ -297,8 +372,7 @@ async function poll() {
 /* ── 질의 ────────────────────────────────── */
 $('#samples').innerHTML = SAMPLE_GROUPS.map(g => `<div class="sgroup">
   <p class="slabel">${esc(g.label)}<span>${esc(g.note)}</span></p>
-  <div class="srow">${g.qs.map(q =>
-    `<button type="button" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div>
+  <div class="srow">${g.qs.map(q => `<button type="button" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div>
 </div>`).join('');
 $('#samples').addEventListener('click', e => {
   const q = e.target.dataset.q;
@@ -315,8 +389,7 @@ $('#askForm').addEventListener('submit', async e => {
   $('#result').innerHTML = '<p class="muted">검색 중…</p>';
   try {
     const url = `/api/ask?q=${encodeURIComponent(q)}&k=8&generate=${$('#gen').checked ? 1 : 0}`;
-    const r = await (await fetch(url)).json();
-    render(r);
+    render(await (await fetch(url)).json());
   } catch (err) {
     $('#result').innerHTML = `<div class="p"><p class="reason">요청 실패: ${esc(err)}</p></div>`;
   } finally { $('#goBtn').disabled = false; }
@@ -327,9 +400,8 @@ function evidenceBlock(title, hits) {
   return `<div class="ev"><p class="src">${esc(title)} · ${hits.length}건</p>` +
     hits.map(h => `<div class="row">
       ${h.score != null ? `<span class="sc">${Number(h.score).toFixed(3)}</span>` : ''}
-      <span class="id">${esc(h.doc_id)}</span>
-      <span class="tx">${esc(h.text)}${h.truncated ? '…' : ''}</span></div>`).join('') +
-    '</div>';
+      <span class="tx">${esc(h.text)}${h.truncated ? '…' : ''}</span>
+      <span class="id">${esc(h.doc_id)}</span></div>`).join('') + '</div>';
 }
 
 function render(r) {
@@ -337,8 +409,7 @@ function render(r) {
     $('#result').innerHTML = `<div class="p"><h2>오류</h2><pre>${esc(r.error)}</pre></div>`;
     return;
   }
-  const c = r.context, gated = c.gated;
-  const out = [];
+  const c = r.context, gated = c.gated, out = [];
 
   out.push(`<div class="p">
     <div class="route">
@@ -353,10 +424,8 @@ function render(r) {
   </div>`);
 
   if (r.answer) {
-    // `## 핵심` 같은 머리말과 `**굵게**` 만 최소로 렌더한다. 마크다운 전체를
-    // 파싱하지 않는다 — LLM 출력에 HTML 을 넣으면 안 된다
     const md = esc(r.answer)
-      .replace(/^##\s*(.+)$/gm, '<h3 style="margin:16px 0 6px">$1</h3>')
+      .replace(/^##\s*(.+)$/gm, '<h3>$1</h3>')
       .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
       .replace(/^[-·]\s*(.+)$/gm, '<li>$1</li>');
     out.push(`<div class="p" style="border-left:3px solid var(--uv)">
@@ -364,7 +433,31 @@ function render(r) {
       <span class="mono" style="font-size:11px;color:var(--ink3)">${esc(r.provider || '')} ${esc(r.model || '')}</span></div>
       <div class="ans">${md}</div></div>`);
   } else if (r.note) {
-    out.push(`<div class="p" style="padding:13px 18px"><p class="muted" style="margin:0">${esc(r.note)}</p></div>`);
+    out.push(`<div class="p" style="padding:13px 18px"><p class="muted" style="margin:0">${bold(r.note)}</p></div>`);
+  }
+
+  if (c.token_df && c.token_df.length) {
+    const zero = c.token_df.filter(t => t.df === 0);
+    out.push(`<div class="p"><h2>질의 토큰 검증</h2>
+      <p class="sub" style="margin:0 0 12px">각 토큰이 코퍼스에 몇 건 있는지.
+      <b>0 건이면 그 단어는 코퍼스에 없습니다.</b></p>
+      ${hbar(c.token_df.map(t => ({ l: t.token, v: Math.max(t.df, 1),
+        txt: fmt(t.df) + '건' + (t.df === 0 ? '  없음' : ''),
+        c: t.df === 0 ? 'var(--bad)' : 'var(--s1)' })),
+        { barH: 18, labelWidth: 104, aria: '토큰 df' })}
+      ${zero.length ? `<div class="limits"><p><b>코퍼스에 없는 토큰 ${zero.length}개</b>
+        — ${esc(zero.map(z => z.token).join(', '))}. 결과가 나왔더라도 그 단어와 무관하게
+        벡터가 가까운 문서일 수 있습니다.</p></div>` : ''}
+    </div>`);
+  }
+
+  if (c.temporal) {
+    const t = c.temporal;
+    out.push(`<div class="p"><h2>시점 필터</h2>
+      <p class="reason">기간 <b>${esc(t.window)}</b> · 창 안 전체 ${fmt(t.n_total_in_window)}건${
+        t.narrowed_by && t.narrowed_by.length ? ` · 품목명으로 좁힘 ${esc(t.narrowed_by.join(', '))}` : ''}</p>
+      <div class="limits"><p><b>최근 N일에 등록된 목록입니다.</b> 트렌드가 상승했다는
+      뜻이 아닙니다. 품목명 문자열 포함 여부만 본 얕은 매칭입니다.</p></div></div>`);
   }
 
   if (c.evidence_count) {
@@ -379,40 +472,12 @@ function render(r) {
       for (const [src, hits] of Object.entries(bySrc)) body += evidenceBlock(src, hits);
     }
     out.push(`<details class="p" ${r.answer ? '' : 'open'}><summary
-      style="font-size:15px;font-weight:600;margin:0">근거 ${fmt(c.evidence_count)}건 — 원문 그대로</summary>
-      <div style="margin-top:14px">${body}
-      <p class="muted" style="margin:10px 0 0">각 줄 앞의 <span class="mono">doc_id</span>
-      로 원문을 짚을 수 있습니다. URL 이 아니라 <span class="mono">doc_id</span> 가
-      추적 키입니다 — <span class="mono">product.url</span> 은 6,083개 중 285개뿐입니다.</p>
-      </div></details>`);
+      >원문 근거 ${fmt(c.evidence_count)}건 — <span class="mono">doc_id</span> 로 추적</summary>
+      <div style="margin-top:12px">${body}</div></details>`);
   }
 
-  if (c.temporal) {
-    const t = c.temporal;
-    out.push(`<div class="p"><h2>시점 필터</h2>
-      <p class="reason">기간 <b>${esc(t.window)}</b> · 창 안 전체
-      ${fmt(t.n_total_in_window)}건${t.narrowed_by && t.narrowed_by.length
-        ? ` · 품목명으로 좁힘 ${esc(t.narrowed_by.join(', '))}` : ''}</p>
-      <div class="limits"><p><b>이건 "최근 N일에 등록된 목록"입니다.</b>
-      트렌드가 상승했다는 뜻이 아닙니다. 품목명 문자열 포함 여부만 본 얕은 매칭입니다.</p></div>
-    </div>`);
-  }
-
-  if (c.token_df && c.token_df.length) {
-    const zero = c.token_df.filter(t => t.df === 0);
-    out.push(`<div class="p"><h2>질의 토큰별 코퍼스 등장 문서 수</h2>
-      <div class="tw"><table><thead><tr><th>토큰</th><th style="text-align:right">df</th></tr></thead>
-      <tbody>${c.token_df.map(t => `<tr><td class="mono">${esc(t.token)}</td>
-        <td class="n${t.df === 0 ? ' zero' : ''}">${fmt(t.df)}${t.df === 0 ? '  ← 없음' : ''}</td></tr>`).join('')}
-      </tbody></table></div>
-      ${zero.length ? `<div class="limits"><p><b>코퍼스에 전혀 없는 토큰이 ${zero.length}개
-        있습니다</b> — ${esc(zero.map(z => z.token).join(', '))}. 결과가 나왔더라도 그 단어와
-        무관하게 우연히 벡터가 가까운 문서일 수 있습니다.</p></div>` : ''}
-    </div>`);
-  }
-
-  if (c.note) out.push(`<div class="limits"><p>${esc(c.note).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')}</p></div>`);
-  if (r.prompt) out.push(`<details><summary>LLM 에 보낸 프롬프트 보기</summary>
+  if (c.note) out.push(`<div class="limits"><p>${bold(c.note)}</p></div>`);
+  if (r.prompt) out.push(`<details><summary>LLM 에 보낸 프롬프트</summary>
     <pre style="margin-top:10px">${esc(r.prompt)}</pre></details>`);
 
   $('#result').innerHTML = out.join('');
@@ -423,20 +488,26 @@ let cardsDone = false;
 async function loadCards() {
   if (cardsDone) return;
   const d = await (await fetch('/api/cards')).json();
-  const typeChip = t => t === '처방 기준선' ? 'chip g' : 'chip uv';
-  $('#cardsBox').innerHTML = (d.cards || []).map(c => `<div class="card">
+  const chipCls = t => t === '처방 기준선' ? 'chip g' : 'chip uv';
+  $('#cardsBox').innerHTML = (d.cards || []).map(c => {
+    const ch = c.chart || {};
+    return `<div class="card">
     <div class="r"><span class="chip">${esc(c.axis)} 축</span>
-      <span class="${typeChip(c.type)}">${esc(c.type)}</span></div>
+      <span class="${chipCls(c.type)}">${esc(c.type)}</span></div>
     <h4>${esc(c.name)}</h4>
     <p class="b">${esc(c.basis)}</p>
-    ${c.others && c.others.length ? `<div><p class="muted" style="margin:0 0 4px;font-size:12px">
+    ${ch.bars ? pairBar(ch.bars, ch.unit) : ''}
+    ${ch.extra && ch.extra.length ? `<dl class="kv">${ch.extra.map(e =>
+      `<dt>${esc(e.label)}</dt><dd>${e.v || e.v === 0 ? fmt(Math.round(e.v * 10) / 10) + esc(e.unit || '') : '—'}</dd>`).join('')}</dl>` : ''}
+    ${c.use ? `<div class="use"><span class="k">이걸로 무엇을 하나</span>${bold(c.use)}</div>` : ''}
+    ${c.others && c.others.length ? `<div><p class="muted" style="margin:0 0 4px;font-size:11.5px">
       같은 유형에 묶인 성분</p><ul>${c.others.map(o => `<li>${esc(o)}</li>`).join('')}</ul></div>` : ''}
-    ${c.quotes && c.quotes.length ? c.quotes.slice(0, 2).map(q => `<blockquote>${esc(q.text).slice(0, 150)}
-      ${q.url ? `<br><a href="${esc(q.url)}" target="_blank" rel="noopener">원문</a>` : ''}</blockquote>`).join('') : ''}
-    <details><summary>한계 ${c.limits.length}건</summary>
-      <ul style="margin-top:8px">${c.limits.map(l =>
-        `<li>${esc(l).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')}</li>`).join('')}</ul></details>
-  </div>`).join('') || '<p class="muted">카드가 없습니다. <span class="mono">python cards.py</span> 를 먼저 돌리세요.</p>';
+    <details><summary>한계 ${c.limits.length}건${c.quotes && c.quotes.length ? ` · 원문 ${c.quotes.length}건` : ''}</summary>
+      <ul style="margin-top:8px">${c.limits.map(l => `<li>${bold(l)}</li>`).join('')}</ul>
+      ${c.quotes && c.quotes.length ? c.quotes.slice(0, 2).map(q => `<blockquote>${esc(q.text).slice(0, 130)}
+        ${q.url ? `<br><a href="${esc(q.url)}" target="_blank" rel="noopener">원문</a>` : ''}</blockquote>`).join('') : ''}
+    </details>
+  </div>`; }).join('') || '<p class="muted">카드가 없습니다. <span class="mono">python cards.py</span> 를 먼저 돌리세요.</p>';
   cardsDone = true;
 }
 
@@ -445,10 +516,43 @@ let metricsDone = false;
 async function loadMetrics() {
   if (metricsDone) return;
   const d = await (await fetch('/api/metrics')).json();
-  $('#metricsBox').innerHTML = (d.metrics || []).map(m => `<div>
-    <span class="k">${esc(m.label)}</span><span class="v">${esc(m.value)}</span>
-    <span class="n">${esc(m.note).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')}</span></div>`).join('');
+  $('#metricsBox').innerHTML = (d.metrics || []).map(m => `<div class="mrow">
+    <div class="mhead"><span class="g">${esc(m.group)}</span>
+      <span class="k">${esc(m.label)}</span>
+      <span class="v">${esc(m.value)}${esc(m.unit || '')}</span></div>
+    <div class="mbody">
+      <div class="mcell"><p class="t">측정 방법</p><p>${bold(m.how)}</p></div>
+      <div class="mcell lim"><p class="t">한계</p><p>${bold(m.limit)}</p></div>
+    </div>
+    ${m.chart ? `<div class="mchart">${metricChart(m.chart)}</div>` : ''}
+  </div>`).join('');
   metricsDone = true;
+}
+
+/* ── 답변 가능 범위 ───────────────────────── */
+let scopeDone = false;
+async function loadScope() {
+  if (scopeDone) return;
+  const d = await (await fetch('/api/scope')).json();
+  const tiers = (d.scope || []).map(t => `<div class="tier t${t.tier}">
+    <div class="h"><span class="num">${esc(t.tier)}</span>
+      <span class="kind">${esc(t.kind)}</span>
+      <span class="cnt">${fmt(t.n)}유형</span></div>
+    <p class="note">${bold(t.note)}</p>
+    <div class="tw"><table><thead><tr><th>질의</th><th>무슨 일이 일어나나</th></tr></thead>
+    <tbody>${t.rows.map(r => `<tr><td class="mono" style="font-size:12px">${esc(r.q)}</td>
+      <td class="muted" style="font-size:12.5px">${bold(r.what)}</td></tr>`).join('')}
+    </tbody></table></div></div>`).join('');
+  const fixes = (d.fixes || []).length ? `<div class="p">
+    <h2>문서와 실측이 어긋난 자리</h2>
+    <p class="sub" style="margin:0 0 14px">기존 <span class="mono">RAG_답변_가능범위.md</span>
+    를 그대로 읽으면 틀립니다. 실제로 돌려 본 결과로 정정했습니다.</p>
+    <div class="tw"><table><thead><tr><th>문서 주장</th><th>실측</th></tr></thead>
+    <tbody>${d.fixes.map(f => `<tr><td class="muted" style="font-size:12.5px">${esc(f.claim)}</td>
+      <td style="font-size:12.5px">${bold(f.actual)}</td></tr>`).join('')}
+    </tbody></table></div></div>` : '';
+  $('#scopeBox').innerHTML = tiers + fixes;
+  scopeDone = true;
 }
 
 poll();
