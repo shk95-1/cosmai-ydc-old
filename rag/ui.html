@@ -75,7 +75,14 @@ button.go{padding:11px 20px;font:inherit;font-weight:600;background:var(--uv);co
   border:0;border-radius:4px;cursor:pointer}
 button.go:disabled{opacity:.5;cursor:default}
 label.chk{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--ink2)}
-.samples{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 26px}
+.samples{margin:0 0 26px}
+.sgroup{margin:0 0 12px}
+.slabel{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--ink3);margin:0 0 5px;display:flex;gap:9px;
+  align-items:baseline;flex-wrap:wrap}
+.slabel span{font-family:"IBM Plex Sans KR",sans-serif;font-size:11.5px;
+  letter-spacing:0;text-transform:none;color:var(--ink3);font-weight:300}
+.srow{display:flex;flex-wrap:wrap;gap:6px}
 .samples button{appearance:none;background:var(--sunk);border:1px solid var(--line);
   color:var(--ink2);font:inherit;font-size:12.5px;padding:4px 10px;border-radius:14px;cursor:pointer}
 .samples button:hover{border-color:var(--uv);color:var(--uv)}
@@ -150,6 +157,10 @@ blockquote a{color:var(--uv);font-size:11px;font-family:"IBM Plex Mono",monospac
 .metrics .n{grid-column:1/-1;font-size:12.5px;color:var(--ink2);font-weight:300}
 .metrics .n b{color:var(--ink);font-weight:600}
 
+.ans{font-size:14.5px}
+.ans h3{font-size:13px;font-weight:600;color:var(--uv);letter-spacing:.02em}
+.ans li{margin:3px 0 3px 18px;font-size:13.5px;color:var(--ink2);font-weight:300;
+  list-style:disc}
 .muted{color:var(--ink3);font-size:13px;font-weight:300}
 footer{margin-top:44px;padding-top:20px;border-top:1px solid var(--line);
   color:var(--ink3);font-size:12px;font-weight:300}
@@ -181,6 +192,17 @@ footer{margin-top:44px;padding-top:20px;border-top:1px solid var(--line);
     <button class="go" type="submit" id="goBtn">찾기</button>
   </form>
   <div class="samples" id="samples"></div>
+  <details class="p" style="padding:14px 18px">
+    <summary>못 답하거나 <b>일부러 거부</b>하는 질문</summary>
+    <div class="tw" style="margin-top:12px"><table><tbody>
+      <tr><td>"이 성분 넣으면 매출 오를까"</td><td class="muted">판매량 데이터가 없습니다</td></tr>
+      <tr><td>없는 성분 물어보기</td><td class="muted">df=0 으로 잡아 거부합니다. <b>의도된 동작</b>입니다</td></tr>
+      <tr><td>"이 성분 효과 있어"</td><td class="muted">식약처 <b>등록</b>과 <b>효과 입증</b>은 다릅니다. 등록 사실만 말합니다</td></tr>
+      <tr><td>"이 성분 때문에 이 반응이 생겼어"</td><td class="muted">인과를 단정하지 않습니다. "~라는 언급이 있었다" 까지입니다</td></tr>
+      <tr><td>"다음 분기에 뭐가 뜰까"</td><td class="muted">예측 모델이 없습니다. 후향 검증 22% · 기저율 47%</td></tr>
+      <tr><td>논문·연구 동향</td><td class="muted">검색어가 화장품을 세지 않아 축 전체를 중지했습니다</td></tr>
+    </tbody></table></div>
+  </details>
   <div id="result"></div>
 </section>
 
@@ -219,13 +241,19 @@ const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fmt = (n) => Number(n).toLocaleString('ko-KR');
 
-const SAMPLES = [
-  '보고번호 2018008612',
-  '판테놀 쓰는 선크림',
-  '백탁이 심해요',
-  '눈이 시리고 따가워요',
-  '최근에 나온 무기자차 선크림',
-  '크소나이드 함유 제품 있어',
+/* 수호님 `RAG_답변_가능범위.md` 의 네 갈래를 그대로 쓴다.
+   **화면이 답할 수 있는 것을 먼저 가르쳐야** 사람이 헛질문을 안 한다 */
+const SAMPLE_GROUPS = [
+  {label:'정확한 사실 조회', note:'P@10 0.841 — 가장 믿을 수 있다',
+   qs:['보고번호 2018008612', '에칠헥실트리아존 쓰는 선크림', 'SPF50 PA++++ 제품']},
+  {label:'시점 조회', note:'등록일 필터. 목록만 준다 — 트렌드 판정 아님',
+   qs:['최근 나온 무기자차 선크림', '요즘 신제품 뭐 있어']},
+  {label:'소비자 반응', note:'Hit@10 13% — 열 번에 아홉 번은 못 찾는다',
+   qs:['백탁이 심해요', '눈이 시리고 따가워요', '끈적임 심하다는 얘기 있나']},
+  {label:'여러 소스 비교', note:'소스별로 나눠 보여준다. 점수는 안 섞는다',
+   qs:['판테놀 쓰는 선크림', '콜라겐 들어간 제품 뭐가 좋아']},
+  {label:'거부하는 질문', note:'의도된 동작이다',
+   qs:['크소나이드 함유 제품 있어', '다음 분기에 뭐가 뜰까']},
 ];
 const ROUTE_LABEL = {
   bm25: 'BM25 · 어휘 검색', vector: '벡터 · 의미 검색',
@@ -267,8 +295,11 @@ async function poll() {
 }
 
 /* ── 질의 ────────────────────────────────── */
-$('#samples').innerHTML = SAMPLES.map(s =>
-  `<button type="button" data-q="${esc(s)}">${esc(s)}</button>`).join('');
+$('#samples').innerHTML = SAMPLE_GROUPS.map(g => `<div class="sgroup">
+  <p class="slabel">${esc(g.label)}<span>${esc(g.note)}</span></p>
+  <div class="srow">${g.qs.map(q =>
+    `<button type="button" data-q="${esc(q)}">${esc(q)}</button>`).join('')}</div>
+</div>`).join('');
 $('#samples').addEventListener('click', e => {
   const q = e.target.dataset.q;
   if (!q) return;
@@ -322,8 +353,16 @@ function render(r) {
   </div>`);
 
   if (r.answer) {
-    out.push(`<div class="p"><h2>LLM 답변</h2>
-      <p style="white-space:pre-wrap;margin:0">${esc(r.answer)}</p></div>`);
+    // `## 핵심` 같은 머리말과 `**굵게**` 만 최소로 렌더한다. 마크다운 전체를
+    // 파싱하지 않는다 — LLM 출력에 HTML 을 넣으면 안 된다
+    const md = esc(r.answer)
+      .replace(/^##\s*(.+)$/gm, '<h3 style="margin:16px 0 6px">$1</h3>')
+      .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+      .replace(/^[-·]\s*(.+)$/gm, '<li>$1</li>');
+    out.push(`<div class="p" style="border-left:3px solid var(--uv)">
+      <div class="route"><span class="badge">답변</span>
+      <span class="mono" style="font-size:11px;color:var(--ink3)">${esc(r.provider || '')} ${esc(r.model || '')}</span></div>
+      <div class="ans">${md}</div></div>`);
   } else if (r.note) {
     out.push(`<div class="p" style="padding:13px 18px"><p class="muted" style="margin:0">${esc(r.note)}</p></div>`);
   }
@@ -339,10 +378,13 @@ function render(r) {
       (c.evidence || []).forEach(h => (bySrc[h.source || '?'] ||= []).push(h));
       for (const [src, hits] of Object.entries(bySrc)) body += evidenceBlock(src, hits);
     }
-    out.push(`<div class="p"><h2>근거 — 원문 그대로</h2>${body}
+    out.push(`<details class="p" ${r.answer ? '' : 'open'}><summary
+      style="font-size:15px;font-weight:600;margin:0">근거 ${fmt(c.evidence_count)}건 — 원문 그대로</summary>
+      <div style="margin-top:14px">${body}
       <p class="muted" style="margin:10px 0 0">각 줄 앞의 <span class="mono">doc_id</span>
       로 원문을 짚을 수 있습니다. URL 이 아니라 <span class="mono">doc_id</span> 가
-      추적 키입니다 — <span class="mono">product.url</span> 은 6,083개 중 285개뿐입니다.</p></div>`);
+      추적 키입니다 — <span class="mono">product.url</span> 은 6,083개 중 285개뿐입니다.</p>
+      </div></details>`);
   }
 
   if (c.temporal) {

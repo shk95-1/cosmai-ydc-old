@@ -23,8 +23,10 @@ import json
 import os
 from pathlib import Path
 
-MODEL = "claude-sonnet-5"
-MAX_TOKENS = 1200
+# 제공자별 기본 모델. 키 접두로 자동 판정한다 — 시현님이 OpenAI 키를
+# `ANTHROPIC_API_KEY` 에 넣어 두셨고, 그러면 Anthropic 클라이언트가 거부한다
+MODELS = {"anthropic": "claude-sonnet-5", "openai": "gpt-4o"}
+MAX_TOKENS = 1100
 
 SYSTEM = """당신은 화장품 트렌드·성분 데이터 어시스턴트입니다. 아래를 반드시 지키세요.
 
@@ -51,6 +53,25 @@ SYSTEM = """당신은 화장품 트렌드·성분 데이터 어시스턴트입�
 9. 이 데이터로 **미래를 예측하지 마세요.** 후향 검증에서 상승 지속 적중률이 22%,
    기저율이 47% 였습니다. "지금 이런 비대칭이 있다" 까지만 말하세요.
 10. 논문·연구 동향은 **쓰지 마세요.** 검색어가 화장품을 세지 않아 축 전체를 중지했습니다.
+
+## 답변 형식 — 반드시 이 세 절로만
+
+근거를 나열하지 마세요. 사람은 근거를 화면에서 이미 봅니다. **당신이 할 일은
+그 근거에서 무엇이 핵심인지 말하는 것입니다.**
+
+```
+## 핵심
+질문에 대한 답만 2~4문장. 숫자는 근거에 있는 것만. 각 문장 끝에 [출처: doc_id].
+
+## 근거 요약
+불릿 3개 이내. 근거를 옮겨 적지 말고 **무엇을 말해 주는지** 쓰세요.
+같은 얘기를 하는 근거가 여러 건이면 "N건에서 같은 말이 나온다" 로 묶으세요.
+
+## 한계
+1~2줄. 이 답으로 하면 안 되는 것. 근거가 한쪽 소스에만 있으면 그것도 여기.
+```
+
+길게 쓰지 마세요. **핵심 절이 네 문장을 넘으면 잘라내세요.**
 """
 
 
@@ -108,24 +129,67 @@ def build_prompt(ctx: dict) -> str:
     return "\n".join(lines)
 
 
+KEY_NAMES = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "LLM_API_KEY")
+
+
 def api_key() -> str | None:
-    """환경변수 우선, 없으면 `.env`. **값을 로그에 찍지 않는다.**"""
-    key = os.environ.get("ANTHROPIC_API_KEY")
-    if key:
-        return key
+    """환경변수 우선, 없으면 `.env`. **값을 로그에 찍지 않는다.**
+
+    이름을 세 개 다 본다. 키 이름과 제공자가 안 맞아도 된다 — `provider()` 가
+    **접두로 판정**한다. 시현님이 OpenAI 키를 `ANTHROPIC_API_KEY` 에 넣어 두셨고
+    이름만 믿으면 거기서 죽는다.
+    """
+    for name in KEY_NAMES:
+        v = os.environ.get(name)
+        if v:
+            return v.strip()
     env = Path(__file__).resolve().parent.parent / ".env"
     if env.exists():
         for line in env.read_text(encoding="utf-8").splitlines():
-            if line.strip().startswith("ANTHROPIC_API_KEY="):
-                return line.split("=", 1)[1].strip().strip("\"'") or None
+            line = line.strip()
+            if line.startswith("#") or "=" not in line:
+                continue
+            name, v = line.split("=", 1)
+            if name.strip() in KEY_NAMES and v.strip():
+                return v.strip().strip("\"'")
     return None
 
 
-def generate(ctx: dict, key: str | None = None, model: str = MODEL) -> dict:
+def provider(key: str) -> str:
+    """키 **접두**로 제공자를 정한다. 이름이 아니라 값을 본다.
+
+        sk-ant-…                    anthropic
+        sk-proj-… · sk-svcacct-…    openai
+        sk-…  (그 외)                openai (구형 키)
+    """
+    if key.startswith("sk-ant-"):
+        return "anthropic"
+    if key.startswith(("sk-proj-", "sk-svcacct-", "sk-")):
+        return "openai"
+    return "unknown"
+
+
+def _call(kind: str, key: str, model: str, prompt: str) -> str:
+    if kind == "anthropic":
+        import anthropic
+        m = anthropic.Anthropic(api_key=key).messages.create(
+            model=model, max_tokens=MAX_TOKENS, system=SYSTEM,
+            messages=[{"role": "user", "content": prompt}])
+        return m.content[0].text
+    import openai
+    r = openai.OpenAI(api_key=key).chat.completions.create(
+        model=model, max_tokens=MAX_TOKENS,
+        messages=[{"role": "system", "content": SYSTEM},
+                  {"role": "user", "content": prompt}])
+    return r.choices[0].message.content or ""
+
+
+def generate(ctx: dict, key: str | None = None, model: str | None = None) -> dict:
     """근거가 0 이면 LLM 을 부르지 않는다 — 규칙 3 을 코드가 먼저 적용한다."""
     prompt = build_prompt(ctx)
     out = {"prompt": prompt, "answer": "", "executed": False, "note": "",
-           "model": model, "citations": [h["doc_id"] for h in ctx.get("evidence", [])]}
+           "model": model or "", "provider": "",
+           "citations": [h["doc_id"] for h in ctx.get("evidence", [])]}
 
     if not ctx.get("evidence"):
         out["answer"] = "제공된 데이터로는 답할 수 없습니다. 관련 근거를 찾지 못했습니다."
@@ -135,20 +199,29 @@ def generate(ctx: dict, key: str | None = None, model: str = MODEL) -> dict:
 
     key = key or api_key()
     if not key:
-        out["note"] = ("ANTHROPIC_API_KEY 가 없다. 프롬프트와 근거만 낸다 — "
+        out["note"] = ("API 키가 없다(`ANTHROPIC_API_KEY`·`OPENAI_API_KEY`·"
+                       "`LLM_API_KEY` 중 하나). 프롬프트와 근거만 낸다 — "
                        "**사람이 근거를 직접 읽는 것이 이 프로젝트의 기본이다.**")
         return out
-    try:
-        import anthropic
-    except ImportError:
-        out["note"] = "anthropic 패키지가 없다. `pip install anthropic` 후 다시."
-        return out
 
-    client = anthropic.Anthropic(api_key=key)
-    msg = client.messages.create(model=model, max_tokens=MAX_TOKENS, system=SYSTEM,
-                                 messages=[{"role": "user", "content": prompt}])
-    out["answer"] = msg.content[0].text
-    out["executed"] = True
+    kind = provider(key)
+    if kind == "unknown":
+        out["note"] = ("키 접두를 알 수 없다. `sk-ant-`(Anthropic) 또는 "
+                       "`sk-`(OpenAI) 로 시작해야 한다")
+        return out
+    out["provider"] = kind
+    out["model"] = model or MODELS[kind]
+    try:
+        out["answer"] = _call(kind, key, out["model"], prompt)
+        out["executed"] = True
+    except ImportError:
+        out["note"] = f"{kind} 패키지가 없다. `pip install {kind}` 후 다시."
+    except Exception as exc:
+        # **키 값이 예외 문자열에 섞여 나올 수 있다.** 앞부분만 남긴다
+        msg = str(exc)
+        if key[:12] in msg:
+            msg = msg.replace(key, "<키 가림>")
+        out["note"] = f"{kind} 호출 실패: {msg[:300]}"
     return out
 
 
@@ -181,9 +254,19 @@ def demo() -> None:
     assert not g2["executed"] and "직접 읽는 것" in g2["note"], g2
 
     # 시스템 프롬프트에 우리 원칙이 다 들어 있어야 한다
-    for must in ("doc_id", "Hit@10 13%", "22%", "논문", "인과", "섞어서"):
+    for must in ("doc_id", "Hit@10 13%", "22%", "논문", "인과", "섞어서",
+                 "## 핵심", "## 한계", "네 문장을 넘으면"):
         assert must in SYSTEM, must
-    print("demo ok — 프롬프트 조립 3종 · 시스템 프롬프트 규칙 10개")
+
+    # **키 이름이 아니라 값의 접두로 제공자를 정한다.** 이름만 믿으면 죽는다
+    assert provider("sk-ant-abc") == "anthropic"
+    assert provider("sk-proj-abc") == "openai"
+    assert provider("sk-svcacct-abc") == "openai"
+    assert provider("sk-abc") == "openai"
+    assert provider("gsk_abc") == "unknown"
+    g3 = generate(multi, key="gsk_모르는키")
+    assert not g3["executed"] and "접두를 알 수 없다" in g3["note"], g3
+    print("demo ok — 프롬프트 3종 · 규칙 10개 · 답변 형식 3절 · 제공자 판정 5종")
 
 
 def main() -> int:
