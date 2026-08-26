@@ -487,9 +487,13 @@ def main() -> int:
     p.add_argument("--source", action="append",
                    help="youtube_video / youtube_comment 등. 여러 번 쓸 수 있다")
     p.add_argument("--top", type=int, default=10)
+    # **`action="append"` 에 default 를 주면 안 된다.** argparse 는 기본값을 지우지
+    # 않고 거기에 덧붙인다 — `--chunks A` 가 [기본값, A] 가 되어 성분·식약처가
+    # 조용히 같이 색인된다. 소스를 갈라 색인하려는 사람이 절대 못 가른다.
+    # None 으로 두고 아래에서 채운다
     p.add_argument("--chunks", action="append", type=Path,
-                   default=[Path("reports/chunks_ingredient_mfds.csv")],
-                   help="청크 CSV. 성분·식약처는 공통 스키마 변환기가 없어 이쪽으로 넣는다")
+                   help="청크 CSV. 성분·식약처는 공통 스키마 변환기가 없어 이쪽으로 넣는다. "
+                        "안 주면 reports/chunks_ingredient_mfds.csv 하나를 쓴다")
     p.add_argument("--cache", default=".cache/bm25")
     p.add_argument("--no-cache", action="store_true")
     p.add_argument("--per-source", action="store_true",
@@ -502,8 +506,9 @@ def main() -> int:
     if not a.query:
         p.error("--query 를 주거나 --demo 를 쓴다")
 
+    chunks = a.chunks if a.chunks else [Path("reports/chunks_ingredient_mfds.csv")]
     index, origin = build(a.common, a.source,
-                          None if a.no_cache else Path(a.cache), a.chunks)
+                          None if a.no_cache else Path(a.cache), chunks)
     print(f"색인 {index.n:,}개 문서 · 고유 토큰 {len(index.postings):,} · "
           f"평균 길이 {index.avg_len:.1f}")
     print(f"질의 토큰: {sorted(set(tokenize(a.query)))}")
