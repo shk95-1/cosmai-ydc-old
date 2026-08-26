@@ -23,7 +23,7 @@ import json
 import os
 from pathlib import Path
 
-MODEL = "claude-sonnet-4-5"
+MODEL = "claude-sonnet-5"
 MAX_TOKENS = 1200
 
 SYSTEM = """당신은 화장품 트렌드·성분 데이터 어시스턴트입니다. 아래를 반드시 지키세요.
