@@ -175,7 +175,11 @@ def _call(kind: str, key: str, model: str, prompt: str) -> str:
         m = anthropic.Anthropic(api_key=key).messages.create(
             model=model, max_tokens=MAX_TOKENS, system=SYSTEM,
             messages=[{"role": "user", "content": prompt}])
-        return m.content[0].text
+        # **`content[0]` 이 텍스트라고 가정하면 안 된다.** claude-sonnet-5 는
+        # thinking 블록을 먼저 준다 — `'ThinkingBlock' object has no attribute
+        # 'text'` 로 죽었다(08.27 실측). 텍스트 블록만 골라 이어 붙인다
+        parts = [b.text for b in m.content if getattr(b, "type", "") == "text"]
+        return chr(10).join(parts).strip()
     import openai
     r = openai.OpenAI(api_key=key).chat.completions.create(
         model=model, max_tokens=MAX_TOKENS,
@@ -197,7 +201,8 @@ def generate(ctx: dict, key: str | None = None, model: str | None = None) -> dic
         out["note"] = "근거 0건 — LLM 호출 없이 규칙 3 을 코드가 적용했다"
         return out
 
-    key = key or api_key()
+    # 모듈 전역으로 부른다 — 데모가 이 함수를 갈아끼워 "키 없음" 경로를 검사한다
+    key = key or globals()["api_key"]()
     if not key:
         out["note"] = ("API 키가 없다(`ANTHROPIC_API_KEY`·`OPENAI_API_KEY`·"
                        "`LLM_API_KEY` 중 하나). 프롬프트와 근거만 낸다 — "
@@ -249,8 +254,17 @@ def demo() -> None:
     p2 = build_prompt(multi)
     assert "[ingredient]" in p2 and "벡터 검색" in p2, p2
     assert "1,557건" in p2, p2
-    # 근거가 있고 키가 없으면 프롬프트만 낸다
-    g2 = generate(multi, key=None)
+    # 근거가 있고 키가 없으면 프롬프트만 낸다.
+    # **`key=None` 으로는 검사할 수 없다** — 그러면 `api_key()` 가 `.env` 를 찾아
+    # 실제로 API 를 부른다(08.27 에 데모가 그렇게 깨졌다). 조회 함수를 잠시 막는다
+    # `import rag.generate` 로 패치하면 안 된다 — `python -m` 은 이 파일을
+    # `__main__` 으로 돌리므로 임포트가 **두 번째 사본**을 만들고 그쪽만 바뀐다
+    _g = globals()
+    _orig, _g["api_key"] = _g["api_key"], lambda: None
+    try:
+        g2 = generate(multi)
+    finally:
+        _g["api_key"] = _orig
     assert not g2["executed"] and "직접 읽는 것" in g2["note"], g2
 
     # 시스템 프롬프트에 우리 원칙이 다 들어 있어야 한다
