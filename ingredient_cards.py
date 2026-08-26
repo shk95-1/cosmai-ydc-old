@@ -192,8 +192,11 @@ def build(reports: Path, formula: Path, papers: Path) -> list[dict]:
     rows = read(reports / "cross_source_ingredient.csv")
     formula_rows = read(formula) if formula.exists() else []
     total_products = len({r["product_name"] for r in formula_rows})
+    # **`PAPER_HOLD` 를 읽기 앞에서 본다** (현준님 지적, 08.26). 아래 `q = None if
+    # PAPER_HOLD` 는 **사용만** 막고 파일은 그대로 열었다. 중지 중인 축의 파일을
+    # 메모리에 올릴 이유가 없고, 파일이 없어도 이 경로가 돌아야 한다.
     raw: dict[tuple[str, str], dict] = {}
-    if papers.exists():
+    if papers.exists() and not PAPER_HOLD:
         raw = {(r["query"], r["source"]): r for r in read(papers)}
 
     cards = []

@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>COSMAI 근거 탐색기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  color-scheme:light;
+  --ground:#F7F8FA; --panel:#FFFFFF; --sunk:#EEF1F5;
+  --line:#DFE4EB; --line2:#EDF0F4;
+  --ink:#111418; --ink2:#586474; --ink3:#8A94A3;
+  --uv:#5B3FD6; --uv-soft:#EFEBFD;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#a06a00; --s5:#e87ba4; --s6:#4a3aa7;
+  --good:#12855c; --warn:#a06a00; --bad:#c53b3a;
+  --shadow:0 1px 2px rgba(17,20,24,.04),0 8px 24px -12px rgba(17,20,24,.10);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --ground:#101318; --panel:#171B22; --sunk:#1E242D;
+  --line:#2A313C; --line2:#222932;
+  --ink:#EDF0F4; --ink2:#9AA5B4; --ink3:#6B7686;
+  --uv:#9C87F5; --uv-soft:#221C3C;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#9085e9;
+  --good:#199e70; --warn:#c98500; --bad:#e66767;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px -12px rgba(0,0,0,.6);
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#101318; --panel:#171B22; --sunk:#1E242D;
+  --line:#2A313C; --line2:#222932;
+  --ink:#EDF0F4; --ink2:#9AA5B4; --ink3:#6B7686;
+  --uv:#9C87F5; --uv-soft:#221C3C;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#d55181; --s6:#9085e9;
+  --good:#199e70; --warn:#c98500; --bad:#e66767;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px -12px rgba(0,0,0,.6);
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);
+  font-family:"IBM Plex Sans KR",system-ui,"Malgun Gothic",sans-serif;
+  font-size:15px;line-height:1.65;-webkit-font-smoothing:antialiased}
+.mono{font-family:"IBM Plex Mono","IBM Plex Sans KR",ui-monospace,monospace;
+  font-variant-numeric:tabular-nums}
+.wrap{max-width:1080px;margin:0 auto;padding:0 22px 80px}
+
+header{padding:38px 0 0}
+.eyebrow{font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--ink3);margin:0 0 10px}
+h1{font-size:30px;line-height:1.15;font-weight:700;margin:0 0 8px;letter-spacing:-.025em}
+.lede{font-size:14.5px;color:var(--ink2);margin:0 0 22px;font-weight:300;max-width:64ch}
+.lede b{color:var(--ink);font-weight:600}
+
+.status{display:inline-flex;align-items:center;gap:8px;font-family:"IBM Plex Mono",monospace;
+  font-size:11.5px;padding:5px 11px;border-radius:20px;background:var(--sunk);
+  color:var(--ink2);margin:0 0 22px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--warn);flex:none}
+.dot.on{background:var(--good)} .dot.err{background:var(--bad)}
+
+nav{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:0 0 26px}
+nav button{appearance:none;background:none;border:0;border-bottom:2px solid transparent;
+  padding:10px 16px;font:inherit;font-size:14px;font-weight:500;color:var(--ink3);
+  cursor:pointer;margin-bottom:-1px}
+nav button:hover{color:var(--ink2)}
+nav button[aria-selected="true"]{color:var(--uv);border-bottom-color:var(--uv)}
+nav button:focus-visible{outline:2px solid var(--uv);outline-offset:2px;border-radius:3px}
+
+form{display:flex;gap:10px;margin:0 0 8px;flex-wrap:wrap}
+input[type=text]{flex:1 1 320px;min-width:0;padding:11px 14px;font:inherit;
+  background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:4px}
+input[type=text]:focus-visible{outline:2px solid var(--uv);outline-offset:-1px;border-color:var(--uv)}
+button.go{padding:11px 20px;font:inherit;font-weight:600;background:var(--uv);color:#fff;
+  border:0;border-radius:4px;cursor:pointer}
+button.go:disabled{opacity:.5;cursor:default}
+label.chk{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--ink2)}
+.samples{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 26px}
+.samples button{appearance:none;background:var(--sunk);border:1px solid var(--line);
+  color:var(--ink2);font:inherit;font-size:12.5px;padding:4px 10px;border-radius:14px;cursor:pointer}
+.samples button:hover{border-color:var(--uv);color:var(--uv)}
+
+.p{background:var(--panel);border:1px solid var(--line);border-radius:5px;
+  padding:18px 20px;box-shadow:var(--shadow);margin:0 0 16px}
+h2{font-size:15px;font-weight:600;margin:0 0 12px;letter-spacing:-.01em}
+h3{font-size:13px;font-weight:600;margin:16px 0 8px;color:var(--ink2)}
+.route{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px}
+.badge{font-family:"IBM Plex Mono",monospace;font-size:12px;font-weight:600;
+  padding:4px 10px;border-radius:4px;background:var(--uv-soft);color:var(--uv)}
+.badge.b{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad)}
+.reason{font-size:13px;color:var(--ink2);font-weight:300;margin:0}
+.reason b{color:var(--ink);font-weight:600}
+
+.ev{border-left:2px solid var(--line);padding:0 0 0 14px;margin:0 0 14px}
+.ev .src{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--ink3);
+  letter-spacing:.04em;margin:0 0 6px}
+.ev .row{padding:9px 0;border-bottom:1px solid var(--line2)}
+.ev .row:last-child{border-bottom:0}
+.ev .id{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--uv);
+  word-break:break-all;display:block;margin-bottom:3px}
+.ev .tx{font-size:13.5px;color:var(--ink);font-weight:300}
+.ev .sc{font-family:"IBM Plex Mono",monospace;font-size:11px;color:var(--ink3);float:right}
+
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:320px}
+th{text-align:left;font-family:"IBM Plex Mono",monospace;font-size:10px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--ink3);font-weight:500;padding:0 12px 7px 0;
+  border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:7px 12px 7px 0;border-bottom:1px solid var(--line2);vertical-align:top}
+td.n{font-family:"IBM Plex Mono",monospace;font-variant-numeric:tabular-nums;text-align:right;
+  padding-right:14px;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+.zero{color:var(--bad);font-weight:600}
+
+.limits{background:color-mix(in srgb,var(--warn) 6%,var(--panel));
+  border-left:3px solid var(--warn);border-radius:0 4px 4px 0;padding:12px 16px;margin:14px 0 0}
+.limits p{margin:0 0 6px;font-size:12.5px;color:var(--ink2);font-weight:300}
+.limits p:last-child{margin:0}
+.limits b{color:var(--ink);font-weight:600}
+
+pre{background:var(--sunk);border:1px solid var(--line);border-radius:4px;padding:14px;
+  overflow-x:auto;font-family:"IBM Plex Mono",monospace;font-size:11.5px;line-height:1.6;
+  white-space:pre-wrap;word-break:break-word;margin:0;color:var(--ink2)}
+details{margin:14px 0 0}
+summary{cursor:pointer;font-size:12.5px;color:var(--ink2);font-weight:500}
+summary:focus-visible{outline:2px solid var(--uv);outline-offset:2px;border-radius:3px}
+
+.cards{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(310px,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:17px 19px;
+  box-shadow:var(--shadow);display:flex;flex-direction:column;gap:9px}
+.card h4{margin:0;font-size:17px;font-weight:600;letter-spacing:-.01em}
+.card .b{font-size:13px;color:var(--ink2);font-weight:300;flex:1}
+.chip{display:inline-block;font-family:"IBM Plex Mono",monospace;font-size:10.5px;
+  padding:2px 7px;border-radius:3px;background:var(--sunk);color:var(--ink2);font-weight:500}
+.chip.uv{background:var(--uv-soft);color:var(--uv)}
+.chip.g{background:color-mix(in srgb,var(--good) 14%,transparent);color:var(--good)}
+.card ul{margin:0;padding-left:16px;font-size:12px;color:var(--ink2);font-weight:300}
+.card .r{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+blockquote{margin:0;padding:8px 0 8px 12px;border-left:2px solid var(--line);
+  font-size:12.5px;color:var(--ink2);font-weight:300}
+blockquote a{color:var(--uv);font-size:11px;font-family:"IBM Plex Mono",monospace}
+
+.metrics{display:grid;gap:2px;background:var(--line);border:1px solid var(--line);
+  border-radius:5px;overflow:hidden}
+.metrics div{background:var(--panel);padding:14px 18px;display:grid;
+  grid-template-columns:1fr auto;gap:4px 16px;align-items:baseline}
+.metrics .k{font-size:14px;font-weight:600}
+.metrics .v{font-family:"IBM Plex Mono",monospace;font-size:18px;font-weight:600;
+  color:var(--uv);white-space:nowrap}
+.metrics .n{grid-column:1/-1;font-size:12.5px;color:var(--ink2);font-weight:300}
+.metrics .n b{color:var(--ink);font-weight:600}
+
+.muted{color:var(--ink3);font-size:13px;font-weight:300}
+footer{margin-top:44px;padding-top:20px;border-top:1px solid var(--line);
+  color:var(--ink3);font-size:12px;font-weight:300}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <p class="eyebrow">COSMAI · 선크림 트렌드 PoC</p>
+  <h1>근거 탐색기</h1>
+  <p class="lede">질의 유형에 맞는 검색기로 찾고 <b>원문 근거를 그대로</b> 보여줍니다.
+  결론을 만들지 않습니다 — <b>사람이 근거를 읽는 것</b>이 기본입니다.</p>
+  <div class="status" id="status"><span class="dot"></span><span id="statusText">색인 로딩 중…</span></div>
+</header>
+
+<nav role="tablist">
+  <button role="tab" id="t-ask" aria-selected="true" aria-controls="v-ask">질의</button>
+  <button role="tab" id="t-cards" aria-selected="false" aria-controls="v-cards">Opportunity Card</button>
+  <button role="tab" id="t-metrics" aria-selected="false" aria-controls="v-metrics">지표와 한계</button>
+</nav>
+
+<main>
+<section id="v-ask" role="tabpanel" aria-labelledby="t-ask">
+  <form id="askForm">
+    <input type="text" id="q" placeholder="예: 판테놀 쓰는 선크림" autocomplete="off"
+           aria-label="질의">
+    <label class="chk"><input type="checkbox" id="gen"> LLM 답변 생성</label>
+    <button class="go" type="submit" id="goBtn">찾기</button>
+  </form>
+  <div class="samples" id="samples"></div>
+  <div id="result"></div>
+</section>
+
+<section id="v-cards" role="tabpanel" aria-labelledby="t-cards" hidden>
+  <div class="p" style="padding:14px 18px">
+    <p class="muted" style="margin:0"><b>유형은 규칙이 배정했습니다.</b> LLM 이
+    "이건 기회야"라고 판단하지 않습니다. 수치는 저장된 산출물에서 그대로 가져오고
+    카드마다 <b>한계</b>가 붙습니다.</p>
+  </div>
+  <div class="cards" id="cardsBox"><p class="muted">불러오는 중…</p></div>
+</section>
+
+<section id="v-metrics" role="tabpanel" aria-labelledby="t-metrics" hidden>
+  <div class="metrics" id="metricsBox"></div>
+  <div class="limits" style="margin-top:18px">
+    <p><b>이 도구로 하면 안 되는 것</b></p>
+    <p>· 미래 예측 — 후향 검증에서 상승 지속 적중률 22%, 기저율 47%입니다</p>
+    <p>· 소스 간 점수 비교 — BM25 와 코사인은 척도가 다릅니다</p>
+    <p>· 시점 필터 결과를 "트렌드 상승"으로 읽기 — 최근 N일 등록 목록일 뿐입니다</p>
+    <p>· 논문·연구 동향 인용 — 검색어가 화장품을 세지 않아 축 전체를 중지했습니다</p>
+    <p>· 식약처 등록을 효과 보증으로 읽기 — 보고는 효과 입증이 아닙니다</p>
+  </div>
+</section>
+</main>
+
+<footer>
+  <p><span class="mono">rag.server</span> · 검색 <span class="mono">bm25.py · hybrid.py ·
+  vector_threshold.py</span> · 라우팅 <span class="mono">rag/router.py</span><br>
+  전체 지표는 <span class="mono">reports/viz_dashboard.html</span>, 상세는
+  <span class="mono">reports/진행_총정리.md</span></p>
+</footer>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt = (n) => Number(n).toLocaleString('ko-KR');
+
+const SAMPLES = [
+  '보고번호 2018008612',
+  '판테놀 쓰는 선크림',
+  '백탁이 심해요',
+  '눈이 시리고 따가워요',
+  '최근에 나온 무기자차 선크림',
+  '크소나이드 함유 제품 있어',
+];
+const ROUTE_LABEL = {
+  bm25: 'BM25 · 어휘 검색', vector: '벡터 · 의미 검색',
+  multi_source: 'MULTI SOURCE · 둘 다', temporal_filter: 'TEMPORAL · 날짜 필터',
+};
+
+/* ── 탭 ─────────────────────────────────── */
+const TABS = ['ask', 'cards', 'metrics'];
+TABS.forEach(t => $('#t-'+t).addEventListener('click', () => {
+  TABS.forEach(x => {
+    $('#t-'+x).setAttribute('aria-selected', String(x === t));
+    $('#v-'+x).hidden = x !== t;
+  });
+  if (t === 'cards') loadCards();
+  if (t === 'metrics') loadMetrics();
+}));
+
+/* ── 상태 ────────────────────────────────── */
+async function poll() {
+  try {
+    const s = await (await fetch('/api/status')).json();
+    const dot = $('#status .dot'), txt = $('#statusText');
+    if (s.error) {
+      dot.className = 'dot err';
+      txt.textContent = '초기화 실패 — 터미널 로그를 확인하세요';
+      return;
+    }
+    if (s.ready) {
+      dot.className = 'dot on';
+      txt.textContent = s.vectors
+        ? '준비됨 · BM25 + 벡터'
+        : '준비됨 · BM25 만 (벡터는 --vectors 로 켭니다)';
+      $('#goBtn').disabled = false;
+      return;
+    }
+    $('#goBtn').disabled = true;
+    setTimeout(poll, 1200);
+  } catch { setTimeout(poll, 2000); }
+}
+
+/* ── 질의 ────────────────────────────────── */
+$('#samples').innerHTML = SAMPLES.map(s =>
+  `<button type="button" data-q="${esc(s)}">${esc(s)}</button>`).join('');
+$('#samples').addEventListener('click', e => {
+  const q = e.target.dataset.q;
+  if (!q) return;
+  $('#q').value = q;
+  $('#askForm').requestSubmit();
+});
+
+$('#askForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const q = $('#q').value.trim();
+  if (!q) return;
+  $('#goBtn').disabled = true;
+  $('#result').innerHTML = '<p class="muted">검색 중…</p>';
+  try {
+    const url = `/api/ask?q=${encodeURIComponent(q)}&k=8&generate=${$('#gen').checked ? 1 : 0}`;
+    const r = await (await fetch(url)).json();
+    render(r);
+  } catch (err) {
+    $('#result').innerHTML = `<div class="p"><p class="reason">요청 실패: ${esc(err)}</p></div>`;
+  } finally { $('#goBtn').disabled = false; }
+});
+
+function evidenceBlock(title, hits) {
+  if (!hits || !hits.length) return '';
+  return `<div class="ev"><p class="src">${esc(title)} · ${hits.length}건</p>` +
+    hits.map(h => `<div class="row">
+      ${h.score != null ? `<span class="sc">${Number(h.score).toFixed(3)}</span>` : ''}
+      <span class="id">${esc(h.doc_id)}</span>
+      <span class="tx">${esc(h.text)}${h.truncated ? '…' : ''}</span></div>`).join('') +
+    '</div>';
+}
+
+function render(r) {
+  if (r.error) {
+    $('#result').innerHTML = `<div class="p"><h2>오류</h2><pre>${esc(r.error)}</pre></div>`;
+    return;
+  }
+  const c = r.context, gated = c.gated;
+  const out = [];
+
+  out.push(`<div class="p">
+    <div class="route">
+      <span class="badge${gated ? ' b' : ''}">${esc(ROUTE_LABEL[c.route] || c.route)}</span>
+      ${gated ? '<span class="badge b">근거 없음 — 차단</span>' : ''}
+      <span class="mono" style="font-size:11.5px;color:var(--ink3)">근거 ${fmt(c.evidence_count)}건</span>
+    </div>
+    <p class="reason">${esc(c.reason)}</p>
+    ${gated ? `<div class="limits"><p><b>df 게이트가 막았습니다.</b> ${esc(c.gate_reason || '')}</p>
+      <p>코사인 하한선은 쓰지 않습니다 — 진짜 질의(0.798~0.916)와 가짜 질의(0.826~0.867)
+      분포가 거의 겹쳐서, 문턱을 걸면 정답의 70%를 함께 버립니다.</p></div>` : ''}
+  </div>`);
+
+  if (r.answer) {
+    out.push(`<div class="p"><h2>LLM 답변</h2>
+      <p style="white-space:pre-wrap;margin:0">${esc(r.answer)}</p></div>`);
+  } else if (r.note) {
+    out.push(`<div class="p" style="padding:13px 18px"><p class="muted" style="margin:0">${esc(r.note)}</p></div>`);
+  }
+
+  if (c.evidence_count) {
+    let body = '';
+    if (c.groups) {
+      for (const [src, hits] of Object.entries(c.groups)) body += evidenceBlock(src, hits);
+      if (c.vector && c.vector.hits && c.vector.hits.length)
+        body += evidenceBlock('벡터 (의미 유사)', c.vector.hits);
+    } else {
+      const bySrc = {};
+      (c.evidence || []).forEach(h => (bySrc[h.source || '?'] ||= []).push(h));
+      for (const [src, hits] of Object.entries(bySrc)) body += evidenceBlock(src, hits);
+    }
+    out.push(`<div class="p"><h2>근거 — 원문 그대로</h2>${body}
+      <p class="muted" style="margin:10px 0 0">각 줄 앞의 <span class="mono">doc_id</span>
+      로 원문을 짚을 수 있습니다. URL 이 아니라 <span class="mono">doc_id</span> 가
+      추적 키입니다 — <span class="mono">product.url</span> 은 6,083개 중 285개뿐입니다.</p></div>`);
+  }
+
+  if (c.temporal) {
+    const t = c.temporal;
+    out.push(`<div class="p"><h2>시점 필터</h2>
+      <p class="reason">기간 <b>${esc(t.window)}</b> · 창 안 전체
+      ${fmt(t.n_total_in_window)}건${t.narrowed_by && t.narrowed_by.length
+        ? ` · 품목명으로 좁힘 ${esc(t.narrowed_by.join(', '))}` : ''}</p>
+      <div class="limits"><p><b>이건 "최근 N일에 등록된 목록"입니다.</b>
+      트렌드가 상승했다는 뜻이 아닙니다. 품목명 문자열 포함 여부만 본 얕은 매칭입니다.</p></div>
+    </div>`);
+  }
+
+  if (c.token_df && c.token_df.length) {
+    const zero = c.token_df.filter(t => t.df === 0);
+    out.push(`<div class="p"><h2>질의 토큰별 코퍼스 등장 문서 수</h2>
+      <div class="tw"><table><thead><tr><th>토큰</th><th style="text-align:right">df</th></tr></thead>
+      <tbody>${c.token_df.map(t => `<tr><td class="mono">${esc(t.token)}</td>
+        <td class="n${t.df === 0 ? ' zero' : ''}">${fmt(t.df)}${t.df === 0 ? '  ← 없음' : ''}</td></tr>`).join('')}
+      </tbody></table></div>
+      ${zero.length ? `<div class="limits"><p><b>코퍼스에 전혀 없는 토큰이 ${zero.length}개
+        있습니다</b> — ${esc(zero.map(z => z.token).join(', '))}. 결과가 나왔더라도 그 단어와
+        무관하게 우연히 벡터가 가까운 문서일 수 있습니다.</p></div>` : ''}
+    </div>`);
+  }
+
+  if (c.note) out.push(`<div class="limits"><p>${esc(c.note).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')}</p></div>`);
+  if (r.prompt) out.push(`<details><summary>LLM 에 보낸 프롬프트 보기</summary>
+    <pre style="margin-top:10px">${esc(r.prompt)}</pre></details>`);
+
+  $('#result').innerHTML = out.join('');
+}
+
+/* ── 카드 ────────────────────────────────── */
+let cardsDone = false;
+async function loadCards() {
+  if (cardsDone) return;
+  const d = await (await fetch('/api/cards')).json();
+  const typeChip = t => t === '처방 기준선' ? 'chip g' : 'chip uv';
+  $('#cardsBox').innerHTML = (d.cards || []).map(c => `<div class="card">
+    <div class="r"><span class="chip">${esc(c.axis)} 축</span>
+      <span class="${typeChip(c.type)}">${esc(c.type)}</span></div>
+    <h4>${esc(c.name)}</h4>
+    <p class="b">${esc(c.basis)}</p>
+    ${c.others && c.others.length ? `<div><p class="muted" style="margin:0 0 4px;font-size:12px">
+      같은 유형에 묶인 성분</p><ul>${c.others.map(o => `<li>${esc(o)}</li>`).join('')}</ul></div>` : ''}
+    ${c.quotes && c.quotes.length ? c.quotes.slice(0, 2).map(q => `<blockquote>${esc(q.text).slice(0, 150)}
+      ${q.url ? `<br><a href="${esc(q.url)}" target="_blank" rel="noopener">원문</a>` : ''}</blockquote>`).join('') : ''}
+    <details><summary>한계 ${c.limits.length}건</summary>
+      <ul style="margin-top:8px">${c.limits.map(l =>
+        `<li>${esc(l).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')}</li>`).join('')}</ul></details>
+  </div>`).join('') || '<p class="muted">카드가 없습니다. <span class="mono">python cards.py</span> 를 먼저 돌리세요.</p>';
+  cardsDone = true;
+}
+
+/* ── 지표 ────────────────────────────────── */
+let metricsDone = false;
+async function loadMetrics() {
+  if (metricsDone) return;
+  const d = await (await fetch('/api/metrics')).json();
+  $('#metricsBox').innerHTML = (d.metrics || []).map(m => `<div>
+    <span class="k">${esc(m.label)}</span><span class="v">${esc(m.value)}</span>
+    <span class="n">${esc(m.note).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')}</span></div>`).join('');
+  metricsDone = true;
+}
+
+poll();
+</script>
+</body>
+</html>

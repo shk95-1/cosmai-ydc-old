@@ -47,3 +47,7 @@ reports/naver_trend.csv
 .cache/naver_datalab.json
 reports/retrieval_eval_*_all.csv
 reports/cross_source*.csv
+
+# RAG 실행 산출물 — 스크립트로 재현한다
+rag/__pycache__/
+rag/cache/

@@ -29,6 +29,9 @@ csv.field_size_limit(10 ** 8)
 
 # 코퍼스에 없는 가짜 성분명. **있는지 먼저 확인한다** — 있으면 가짜가 아니다.
 # 실제 성분명처럼 보이게 만들었다(접미사 `-사이드`·`-오일`·`추출물`).
+# df=0 인 토큰을 "없는 이름" 으로 볼 최소 길이. 실측으로 정했다 — 위 df_gate 참조
+ZERO_DF_MINLEN = 4
+
 FAKE = [
     "퀀텀펩타이드사이드", "하이드로실록산잔텀", "메가비타플렉소사이드",
     "젤라토프로틴추출물", "네오콜라제닌오일", "울트라세라마이덤",
@@ -145,6 +148,23 @@ def df_gate(query: str, index) -> tuple[bool, str]:
     dfs = {t: len(index.postings.get(t, ())) for t in toks}
     if max(dfs.values()) == 0:
         return (False, f"질의 토큰이 색인에 없다 {sorted(dfs)} — 근거 없음")
+    # **문장 속에 섞인 가짜 이름도 막는다** (08.26). 위 규칙은 "전부 0" 만 막아서
+    # `크소나이드 함유 제품 있어` 를 통과시켰다 — `제품`(df 30,061)·`함유`(454)가
+    # 있으니까. 수호님이 미결로 남겨 둔 자리다.
+    #
+    # 실측으로 문턱을 정했다. `len >= 4` 인 토큰 하나라도 df=0 이면 막는다.
+    #
+    #   규칙                  진짜 61   문장 7   가짜 15
+    #   전부 0 (초판)          1 막힘    0 막힘   10 막힘
+    #   하나라도 0 · len>=3    1 막힘    0 막힘   14 막힘
+    #   하나라도 0 · len>=4    0 막힘    0 막힘   14 막힘   <- 정탐 손실이 없다
+    #
+    # 4글자로 자르는 이유는 짧은 성분명(`루틴`·`산소`)이 부분문자열로 df=0 이 될 수
+    # 있어서다. 못 막는 하나는 키릴 문자 질의인데 그건 토큰이 0개라 위에서 걸러진다
+    missing = sorted(t for t, v in dfs.items() if v == 0 and len(t) >= ZERO_DF_MINLEN)
+    if missing:
+        return (False, f"코퍼스에 없는 이름이 섞여 있다 {missing} — "
+                       f"검색 결과가 나와도 그 이름과 무관한 문서다")
     return (True, f"df 최대 {max(dfs.values()):,}")
 
 
@@ -158,12 +178,19 @@ def demo() -> None:
     assert verdict([], [0.5])[0] == "측정 불가"
 
     class FakeIndex:
-        postings = {"백탁": [1, 2, 3], "선크림": [4]}
+        postings = {"백탁": [1, 2, 3], "선크림": [4], "제품": list(range(50)),
+                    "함유": list(range(9))}
     ok, why = df_gate("백탁", FakeIndex())
     assert ok and "3" in why, (ok, why)
-    # 색인에 없는 말은 막는다
+    # 색인에 없는 말은 막는다 — 토큰이 하나뿐이라 "전부 0" 규칙에 걸린다
     bad, why2 = df_gate("퀀텀펩타이드사이드", FakeIndex())
     assert not bad and "근거 없음" in why2, (bad, why2)
+    # **문장 속에 섞인 가짜 이름도 막는다.** 이게 08.26 에 새로 막은 자리다
+    bad3, why3 = df_gate("크소나이드 함유 제품", FakeIndex())
+    assert not bad3 and "없는 이름이 섞여" in why3, (bad3, why3)
+    # 짧은 토큰은 안 막는다 — 부분문자열로 df=0 이 될 수 있다
+    ok4, _ = df_gate("백탁 제품", FakeIndex())
+    assert ok4
     print("demo ok")
 
 
