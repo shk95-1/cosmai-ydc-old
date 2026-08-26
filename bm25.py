@@ -315,7 +315,13 @@ def load_documents(common: Path, sources: list[str] | None = None
     같은 파일에 행이 늘어난다.
     """
     doc_ids, texts, origin = [], [], {}
-    with (common / "document.csv").open(encoding="utf-8-sig", newline="") as handle:
+    path = common / "document.csv"
+    if not path.exists():
+        # 청크만 색인하는 경우다. 경고만 하고 계속한다 — 조용히 빈 색인을
+        # 만들면 "왜 아무것도 안 나오나" 를 찾는 데 시간을 쓴다
+        print(f"[알림] {path} 가 없다. 청크 파일만 색인한다")
+        return doc_ids, texts, origin
+    with path.open(encoding="utf-8-sig", newline="") as handle:
         for row in csv.DictReader(handle):
             if row["quality_flags"]:
                 continue
@@ -403,9 +409,13 @@ def build(common: Path, sources: list[str] | None = None,
         doc_ids, texts, origin = gather()
         return Index(doc_ids, texts), origin
 
+    # **`document.csv` 가 없어도 돌아야 한다.** 청크만으로 색인하는 건 정당한
+    # 사용이다 — 수호님처럼 커머스·성분만 쓰는 경우가 그렇다. 없으면 0 으로 둔다
     source_csv = common / "document.csv"
+    src_stat = (f"{source_csv.stat().st_size}:{source_csv.stat().st_mtime_ns}"
+                if source_csv.exists() else "no-document-csv")
     stamp = hashlib.sha256(
-        f"{source_csv.stat().st_size}:{source_csv.stat().st_mtime_ns}"
+        f"{src_stat}"
         f":{sorted(sources or [])}"
         # 토큰화 규칙이 바뀌면 캐시를 버려야 한다. 안 그러면 옛 토큰으로 평가한다
         f":{sorted(KIWI_TAGS)}:{sorted(NOUN_TAGS)}:{LATIN_RE.pattern}:{K1}:{B}"
