@@ -17,12 +17,18 @@
     엑소좀 20.6% · 트라넥삼산 30.7% · 콜라겐 33.3% · 나이아신아마이드 33.4%
     아데노신은 19.0% 였고 현준님이 그래서 막으셨다. **엑소좀이 같은 자리다.**
 
-게다가 기준선 `cosmetic` 의 잔존율은 100.1% 다 — **분모는 화장품 색인, 분자는
-전분야 색인.** 모집단이 다른 값으로 나눴다.
+**진짜 문제는 분모와 분자가 다른 모집단이라는 것이다.** 분자는 `exosome` 처럼
+전분야 검색어(잔존율 20~48%)인데 분모 `cosmetic` 은 화장품 검색어다. 그 둘로
+나눈 배수는 아무 것도 뜻하지 않는다.
+
+(초판은 "`cosmetic` 잔존율이 100.1% 라서" 를 근거로 적었는데 **그건 근거가 안 된다.**
+필터가 `AND (skin OR cosmetic OR dermatology)` 이고 검색어가 `cosmetic` 이라
+필터가 아무것도 못 걸러내는 항등식이다. 100 을 넘는 0.1% 는 두 계열을 다른 시점에
+받은 색인 드리프트다. 결론은 위 문장으로 서고 100.1% 는 안 쓴다.)
 
 그래서 `cross_source.PAPER_HOLD = True` 다. 논문 칸이 비어서 들어오고 유형이
-자동으로 내려간다 — 엑소좀은 `수요 선행 공백`, 레티날의 `유행 반증`은 사라진다.
-**코드는 그대로 두고 스위치만 내렸다.** 검증 프로토콜이 나오면 다시 켠다.
+자동으로 내려간다. **스위치만 내리면 되는 게 아니었다** — `build()` 가 논문 CSV 를
+직접 읽어 카드에 배수를 인쇄하고 있었다(08.26 발견). 이제 `PAPER_HOLD` 를 본다.
 
 설계 원칙은 `cards.py` 와 같다.
   1. 유형은 규칙이 정한다. LLM 이 "이건 기회야"라고 판단하지 않는다.
@@ -39,10 +45,13 @@
     유행 반증        검색은 급증인데 논문이 뒷걸음                논문 중지로 안 뜬다
     처방 기준선      널리 쓰고 고함량으로도 쓴다                  비교 기준. 기회가 아니다
 
-**레티날 경고가 카드에서 사라진 것을 알고 있다.** 검색 287배인데 처방 1.2% 라
-누군가 다시 발견해서 쫓을 수 있다. 그 경고는 논문 없이도 성립하므로
-`reports/진행_총정리.md` 의 "쓰면 안 되는 것" 절에 글로 남겼다.
-**자동 카드로는 못 낸다 — 광민감성은 우리가 측정한 값이 아니다.**
+**레티날은 처방 0% 다.** 08.26 에 성분표 매칭을 고쳤더니 그렇게 됐다 — 그전에는
+`레티놀` 을 같이 세서 1.2% 로 보였는데 성분표에 `레티날` 은 **0건**이다. 그래서
+검색 287배 · 처방 0% 로 `수요 선행 공백` 의 대표가 된다.
+
+**규칙에서 빼지 않는다.** 광민감성 때문에 선케어 배합이 어렵다는 건 도메인 지식이고
+우리가 측정한 값이 아니다. 손으로 빼면 "결과를 보고 기준 만들기" 가 된다.
+대신 **그 카드의 한계에 왜 쫓지 말아야 하는지를 적는다.**
 
 사용법:
     python ingredient_cards.py
@@ -54,6 +63,8 @@ import csv
 import json
 from collections import defaultdict
 from pathlib import Path
+
+from cross_source import PAPER_HOLD
 
 csv.field_size_limit(10 ** 8)
 
@@ -72,8 +83,8 @@ KEYS = {
     "PDRN": ("피디알엔", "pdrn", "폴리데옥시리보뉴클레오타이드"),
     "엑소좀": ("엑소좀", "exosome"),
     "트라넥삼산": ("트라넥삼산",),
-    "레티날": ("레티날", "레티놀"),
-    "시카센텔라": ("센텔라", "시카"),
+    "레티날": ("레티날",),          # 성분표에 `레티놀` 은 별개 성분이다
+    "시카센텔라": ("병풀", "센텔라", "마데카", "아시아티코", "아시아틱"),
     "나이아신아마이드": ("나이아신아마이드",),
     "히알루론산": ("하이알루로", "히알루론"),
     "펩타이드": ("펩타이드",),
@@ -127,9 +138,9 @@ def classify(row: dict) -> tuple[str, str] | None:
             return ("선행 연구 기회",
                     f"논문 {e:.2f}·{p:.2f} 둘 다 화장품 분야 평균 초과 · "
                     f"검색 {search:.0f}배 · 처방 {pct:.1f}%")
-        return ("수요 선행 공백",
-                f"검색 {search:.0f}배 · 처방 {pct:.1f}% · "
-                f"논문 {'표본 부족' if has_paper and not usable else '검색어 없음'}")
+        why = ("논문 축 중지" if PAPER_HOLD else
+               "논문 표본 부족" if has_paper and not usable else "논문 검색어 없음")
+        return ("수요 선행 공백", f"검색 {search:.0f}배 · 처방 {pct:.1f}% · {why}")
 
     if pct >= PRESCRIBE_WIDE and high <= HIGH_DOSE_SHALLOW:
         return ("함량 공백",
@@ -166,9 +177,10 @@ def products_with(rows: list[dict], keys: tuple[str, ...], limit: int = 3) -> li
         return []
     start = max(0, len(ordered) // 2 - limit // 2)
     lines = [f"{n} — 배합 {o}순위" for n, o in ordered[start:start + limit]]
-    top_name, top_order = ordered[0]
-    lines.append(f"(가장 앞선 제품은 배합 {top_order}순위 — {top_name}. "
-                 f"전체 {len(ordered)}제품 중 예외다)")
+    if len(ordered) > limit:
+        top_name, top_order = ordered[0]
+        lines.append(f"(가장 앞선 제품은 배합 {top_order}순위 — {top_name}. "
+                     f"전체 {len(ordered)}제품 중 예외다)")
     return lines
 
 
@@ -209,7 +221,10 @@ def build(reports: Path, formula: Path, papers: Path) -> list[dict]:
                          [f"기준_세럼 대비 지수 {row['naver_index_recent']} · "
                           f"2016년 대비 {row['naver_growth_x']}배 · 성분 그룹 {row['naver_rank']}위"],
                          "3002 포트 raw_item.payload · 128개월"))
-        q = PAPER_QUERY.get(name)
+        # **`PAPER_HOLD` 를 안 보면 철회한 배수가 카드에 근거로 인쇄된다.**
+        # 08.26 에 실제로 그랬다 — 카드 3장에 EPMC 2.45 / PubMed 1.92 가
+        # "근거" 로 실려 있었고 보정 줄은 `->  / ` 로 깨져 있었다
+        q = None if PAPER_HOLD else PAPER_QUERY.get(name)
         if q and (q, "europepmc") in raw:
             e_raw, p_raw = raw[(q, "europepmc")], raw[(q, "pubmed")]
             evidence.append((f"논문 `{q}`",
@@ -230,7 +245,11 @@ def build(reports: Path, formula: Path, papers: Path) -> list[dict]:
 
         # ---- 한계. 숨기지 않는다 ----
         limits = []
-        if row["paper_usable"] == "false":
+        if PAPER_HOLD:
+            limits.append("논문 축을 쓰지 않는다 — 검색어가 화장품을 세지 않는다"
+                          "(잔존율 20~48%). **검색어가 없는 게 아니라 우리가 내린 것**이다. "
+                          "검증 프로토콜 후 `cross_source.PAPER_HOLD` 로 재개한다")
+        elif row["paper_usable"] == "false":
             limits.append("논문 배수를 쓸 수 없다 — 2019 기준선이 월 5편 미만이라 "
                           "연 두세 편 차이가 몇 배로 보인다 (현준님 `ratio_usable=False`)")
         elif row["paper_epmc"] == "":
@@ -238,14 +257,19 @@ def build(reports: Path, formula: Path, papers: Path) -> list[dict]:
         elif abs(num(row["paper_epmc"]) - num(row["paper_pubmed"])) > PAPER_GAP:
             limits.append(f"두 색인이 {abs(num(row['paper_epmc']) - num(row['paper_pubmed'])):.2f} "
                           f"갈린다 — 논문 추세는 인용하지 않는다")
-        if PAPER_QUERY.get(name):
+        # 논문을 안 쓰면 1월 아티팩트는 이 카드와 무관하다
+        if PAPER_QUERY.get(name) and not PAPER_HOLD:
             limits.append("PubMed 는 1월이 나머지 달의 1.65~2.40배다(색인 아티팩트). "
                           "여기 배수는 연 단위라 안전하지만 월별로 그리면 봉우리가 선다")
         limits.append("NAVER 성분 지수는 `기준_세럼` 대비 상대값이다. "
                       "절대 검색량이 아니고 요청이 다른 그룹과는 직접 비교할 수 없다")
         if name == "레티날":
-            limits.append("성분표 매칭이 `레티놀` 까지 센다 — 제품 수를 후하게 잡는 방향이라 "
-                          "'처방에 거의 없다' 를 약하게 만들 뿐 뒤집지 않는다")
+            limits.append("성분표에 `레티날` 은 **0건**이다. 08.26 전에는 `레티놀` 을 같이 "
+                          "세서 1.2% 로 보였는데 레티놀은 별개 성분이다")
+            limits.append("**광민감성 때문에 선케어 배합이 어려운 성분이다.** 검색 287배·"
+                          "처방 0% 는 맞지만 그 공백에는 설명이 있다. 우리가 측정한 값이 "
+                          "아니라 도메인 지식이므로 규칙에서 빼지 않고 여기 적는다 — "
+                          "빼면 누군가 287배를 다시 발견해서 쫓는다")
         if pct > 0:
             limits.append(f"표의 `배합순위 중앙 {row['median_order']}위` 는 성분 등장 "
                           f"**전체**의 중앙이고, 근거로 실린 제품 순번은 **제품별 최선** "
@@ -253,8 +277,14 @@ def build(reports: Path, formula: Path, papers: Path) -> list[dict]:
         if pct > 0 and num(row["median_order"]) == 0:
             limits.append("배합순위가 비어 있다 — 순번을 못 읽은 행이다")
         limits.append("성분표는 올리브영 선케어 카테고리다. 전체 시장이 아니다")
-        limits.append("담론 언급 수를 '선크림 담론'으로 읽지 말 것 — 색인 전체에서 센 값이다. "
-                      "PDRN 은 1,522건 중 선크림 단어가 같이 있는 것이 187건뿐이다(실측)")
+        sun = row.get("talk_youtube_sun")
+        if sun not in (None, ""):
+            tot = int(num(row["talk_youtube"]))
+            limits.append(f"담론 언급 수를 '선크림 담론'으로 읽지 말 것 — 색인 전체에서 "
+                          f"센 값이다. **{name} 은 {tot:,}건 중 선크림 단어가 같이 있는 것이 "
+                          f"{int(num(sun)):,}건**({100*num(sun)/tot:.1f}%)이다(실측)")
+        else:
+            limits.append("담론 언급 수를 '선크림 담론'으로 읽지 말 것 — 색인 전체에서 센 값이다")
 
         strength = (num(row["naver_growth_x"]) if kind in ("선행 연구 기회", "수요 선행 공백", "유행 반증")
                     else pct)
@@ -297,12 +327,14 @@ HEADER = """# R&D Opportunity Card — 성분 축
 유형은 규칙이 배정했고 모든 수치는 `reports/cross_source_ingredient.csv` 에서
 그대로 가져왔다. 여기서 새로 계산한 것은 없다.
 
-**소스를 합산하지 않는다.** 분모가 전부 다르다 — 논문은 색인 성장률 보정 배수,
-NAVER 는 `기준_세럼` 대비 지수, 성분표는 577제품 대비 채택률이다. 크기가 아니라
-**순위와 방향**을 본다.
+**소스를 합산하지 않는다.** 분모가 다르다 — NAVER 는 `기준_세럼` 대비 지수,
+성분표는 577제품 대비 채택률이다. 크기가 아니라 **순위와 방향**을 본다.
 
-**세 유형은 기회, 하나는 경고, 하나는 기준선이다.** `유행 반증` 은 쫓지 말라는
-카드다 — 빼면 누군가 다시 발견해서 쫓기 때문에 근거와 함께 남긴다.
+**논문 축은 중지 상태다**(`cross_source.PAPER_HOLD`). 그래서 논문 칸이 비어 있고
+`선행 연구 기회`·`유행 반증` 두 유형은 뜨지 않는다. 검증 프로토콜 후 재개한다.
+
+**유형당 한 장만 낸다.** 같은 유형에 묶인 성분 이름은 카드에 남긴다 — 지우면
+"검색은 급증인데 선케어 처방에 없는 성분이 넷" 이라는 사실이 사라진다.
 """
 
 
@@ -388,7 +420,11 @@ def demo() -> None:
     # 같은 제품에 여러 번 나오면 가장 앞선 순번으로 한 번만 센다
     dup = [{"product_name": "B", "ingredient": "판테놀", "ingredient_order": "4"},
            {"product_name": "B", "ingredient": "판테놀유도체", "ingredient_order": "40"}]
-    assert len(products_with(dup, ("판테놀",))) == 2, products_with(dup, ("판테놀",))
+    got1 = products_with(dup, ("판테놀",))
+    assert got1 == ["B — 배합 4순위"], got1
+    # **제품 수가 limit 이하면 예외 줄을 붙이지 않는다.** 붙이면 "전체 1제품 중
+    # 예외다" 처럼 대표와 예외가 같은 제품이 된다 (엑소좀에서 실제로 그랬다)
+    assert not any("예외" in g for g in got1), got1
     print("demo ok")
 
 

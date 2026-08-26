@@ -48,12 +48,22 @@ TOPIC_ROWS = [
 ]
 
 # NAVER 성분 그룹 -> 성분표에서 찾을 이름 조각. 소문자 부분문자열로 본다.
+#
+# **두 글자 별칭을 성분명 부분문자열로 쓰면 안 된다.** 08.26 에 두 개가 걸렸다.
+#
+#   `시카`   263행 전부 **트라이에톡시카프릴릴실레인**(실리콘 분산제)이었다.
+#            `센텔라` 는 0행 — 성분표는 센텔라를 **병풀** 로 표기한다.
+#            41.1% 라고 발표할 뻔했다. 실제는 35.0% 이고 물질이 아예 다르다.
+#   `레티놀`  성분표에 `레티날` 은 0건이고 8행 전부 레티놀이다. 한계에 "레티놀까지
+#            세서 후하게 잡는다" 고 적어 뒀는데 후한 게 아니라 **전부 다른 성분**이었다.
+#
+# `--audit` 로 키별 고유 성분명을 찍어 확인한다. 눈으로는 못 잡는다.
 INGREDIENT_KEYS = {
     "PDRN": ("피디알엔", "pdrn", "폴리데옥시리보뉴클레오타이드"),
     "엑소좀": ("엑소좀", "exosome"),
     "트라넥삼산": ("트라넥삼산",),
-    "레티날": ("레티날", "레티놀"),
-    "시카센텔라": ("센텔라", "시카"),
+    "레티날": ("레티날",),
+    "시카센텔라": ("병풀", "센텔라", "마데카", "아시아티코", "아시아틱"),
     "나이아신아마이드": ("나이아신아마이드",),
     "히알루론산": ("하이알루로", "히알루론"),
     "펩타이드": ("펩타이드",),
@@ -67,7 +77,12 @@ TOPIC_FIELDS = ["naver_group", "topic_id", "naver_recent", "naver_rank",
 ING_FIELDS = ["ingredient", "naver_index_recent", "naver_growth_x", "naver_rank",
               "paper_epmc", "paper_pubmed", "paper_usable",
               "formula_products", "formula_pct", "median_order", "high_dose_pct",
-              "talk_youtube", "talk_commerce", "reading"]
+              "talk_youtube", "talk_youtube_sun", "talk_commerce", "reading"]
+
+# 담론 수를 "선크림 담론" 으로 읽으면 안 된다. 색인 전체에서 센 값이라
+# 같은 채널이 소개한 앰플·스킨부스터가 다 들어 있다. 그래서 **선크림 단어가
+# 같이 있는 것만 따로 센다.** PDRN 은 1,522건 중 187건뿐이었다
+SUN_WORDS = ("선크림", "썬크림", "선스크린", "자차", "선세럼", "선쿠션", "자외선차단")
 
 # NAVER 그룹 -> 논문 검색어. 현준님 데이터(slopindustries/cosmai-ml)의 query 값이다.
 # 엑소좀·펩타이드는 검색어가 없어 빈칸으로 둔다 — 0 으로 채우면 없는 값이 있는
@@ -90,18 +105,60 @@ PAPER_QUERY = {
 # 순수 검색어도 못 쓴다는 걸 잔존율로 확인했다.
 #
 #   엑소좀 20.6% · 트라넥삼산 30.7% · 콜라겐 33.3% · 나이아신아마이드 33.4%
-#   (= (skin) 을 붙이면 남는 비율. 나머지는 피부와 무관한 논문이다)
+#   (= (skin) 을 붙이면 남는 비율. 나머지는 피부와 무관한 논문이다. Europe PMC ·
+#    92개월 기준이다 — 현준님 EXP-007 은 PubMed 2025 로 재서 값이 더 낮다)
 #   아데노신은 19.0% 였고 현준님이 그래서 막으셨다. **엑소좀이 그와 같은 자리다.**
 #
-# 그리고 보정 자체가 틀렸다. `cosmetic` 의 잔존율은 100.1% 다 — **기준선은 화장품
-# 색인인데 분자는 전분야 색인이다.** 모집단이 다른 값으로 나눴다. "두 색인 차이가
-# 평균 0.083 으로 좁혀졌다" 도 같은 상수로 나눠서 생긴 수렴이지 일치의 증거가 아니다.
+# 그리고 보정 자체가 성립하지 않는다. **분자는 전분야 검색어(잔존율 20~48%)이고
+# 분모 `cosmetic` 은 화장품 검색어다.** 모집단이 다른 값으로 나눴다.
+#
+# (초판은 "`cosmetic` 잔존율 100.1%" 를 근거로 적었는데 그건 근거가 못 된다 —
+#  필터가 `AND (skin OR cosmetic OR dermatology)` 이고 검색어가 `cosmetic` 이라
+#  필터가 아무것도 안 걸러내는 항등식이고, 100 초과분은 색인 드리프트다.
+#  "차이 0.083 으로 좁혀졌다" 도 **같은 상수가 아니라 소스별로 다른 상수**(2.10 · 1.44)
+#  로 나눈 것이다. 그 두 상수의 비가 소스 간 계통 편차와 비슷해서 수렴이 기계적으로
+#  나오는 것이지 일치의 증거가 아니다.)
 #
 # 검증 프로토콜이 나오면 다시 켠다. 그때까지 True 로 둔다.
 PAPER_HOLD = True
 
 PAPER_BASELINE = "cosmetic"      # 색인 자체의 성장률. 이걸로 나눠야 비교가 된다
 PAPER_GAP = 0.3                  # 두 색인 보정 배수가 이만큼 벌어지면 진짜 이견
+
+
+def audit(formula: Path) -> int:
+    """키별로 실제 잡히는 고유 성분명을 찍는다. **부분문자열 오매칭 전용 검사다.**
+
+    `시카` 가 트라이에톡시카프릴릴실레인 257행을 잡고 있었는데 채택률만 보면
+    41.1% 로 그럴듯했다. 이름을 찍으면 즉시 보인다.
+    """
+    rows = read(formula)
+    prods = {r["product_name"] for r in rows}
+    print(f"{formula} — {len(rows):,}행 / {len(prods)}제품\n")
+    bad = 0
+    for group, keys in INGREDIENT_KEYS.items():
+        hit = [r for r in rows
+               if any(k in r["ingredient"].replace(" ", "").lower() for k in keys)]
+        names = Counter(r["ingredient"] for r in hit)
+        p = {r["product_name"] for r in hit}
+        print(f"{group}  키={keys}")
+        print(f"  {len(hit)}행 / {len(p)}제품 ({100*len(p)/len(prods):.1f}%) · "
+              f"고유명 {len(names)}종")
+        for n, c in names.most_common(5):
+            # 그룹 이름의 조각이 성분명에 없으면 사람이 봐야 한다
+            mark = "" if any(k in n for k in keys) else "   <- 키와 안 겹침"
+            print(f"    {c:>4}  {n}{mark}")
+        if len(names) > 5:
+            print(f"    … {len(names)-5}종 더")
+        if hit and not any(any(k in r["ingredient"] for k in keys) for r in hit):
+            print("  [의심] 잡힌 성분명에 키가 하나도 안 들어 있다")
+            bad += 1
+        print()
+    if bad:
+        print(f"[실패] 의심 {bad}건. 키를 고쳐야 한다")
+        return 1
+    print("[통과] 키마다 잡힌 성분명이 키를 포함한다")
+    return 0
 
 
 def read(path: Path) -> list[dict]:
@@ -251,6 +308,8 @@ def ingredient_table(naver: list[dict], formula: list[dict],
         high = (100 * sum(1 for o in order if o <= 10) / len(order)) if order else 0.0
         terms = (group,) + INGREDIENT_KEYS[group]
         talk_y = count_terms(youtube, terms)
+        talk_y_sun = sum(1 for t in youtube
+                         if any(x in t for x in terms) and any(w in t for w in SUN_WORDS))
         talk_c = count_terms(commerce, terms)
 
         paper = papers.get(PAPER_QUERY.get(group, ""), {})
@@ -284,7 +343,8 @@ def ingredient_table(naver: list[dict], formula: list[dict],
             "formula_pct": round(100 * len(names) / total, 1),
             "median_order": median if median is not None else "",
             "high_dose_pct": round(high, 0),
-            "talk_youtube": talk_y, "talk_commerce": talk_c,
+            "talk_youtube": talk_y, "talk_youtube_sun": talk_y_sun,
+            "talk_commerce": talk_c,
             "reading": " · ".join(reading),
         })
     rows.sort(key=lambda r: -float(r["naver_index_recent"]))
@@ -413,12 +473,17 @@ def main() -> int:
     p.add_argument("--commerce", type=Path, default=Path("reports/chunks_commerce.csv"))
     p.add_argument("--papers", type=Path,
                    default=Path("data/external/paper_growth.csv"))
+    p.add_argument("--audit", action="store_true",
+                   help="키별로 실제 잡히는 고유 성분명을 찍는다. 부분문자열 오매칭은 "
+                        "이걸 안 찍으면 못 잡는다")
     p.add_argument("--out", type=Path, default=Path("reports/cross_source.csv"))
     p.add_argument("--demo", action="store_true")
     a = p.parse_args()
     if a.demo:
         demo()
         return 0
+    if a.audit:
+        return audit(a.formula)
     return run(a.naver, a.trend, a.formula, a.youtube, a.commerce, a.papers,
                a.out)
 

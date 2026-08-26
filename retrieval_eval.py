@@ -236,7 +236,12 @@ def main() -> int:
     if a.demo:
         demo()
         return 0
-    out = a.out or Path(f"reports/retrieval_eval_{a.mode}_{a.engine}.csv")
+    # **어느 벡터로 잰 값인지 파일명에 남긴다.** 안 남기면 `--vectors` 를 바꿔도
+    # 같은 파일에 덮여서, 나중에 두 시점의 값을 한 표에 세우고도 모른다.
+    # 08.26 에 실제로 그랬다 — "1차 → 2차" 로 라벨한 델타가 실은 "식약처 벡터
+    # 없음 → 2차" 였고, e5base 를 다시 돌리다 2차 산출물을 덮어썼다
+    tag = "" if a.engine == "bm25" else f"_{Path(a.vectors).name}"
+    out = a.out or Path(f"reports/retrieval_eval_{a.mode}_{a.engine}{tag}.csv")
     return run(a.common, a.mode, out, a.source, a.no_cache, a.engine, a.chunks,
                a.vectors)
 
