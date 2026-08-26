@@ -100,6 +100,48 @@ class Engine:
                            for src, hits in found.items()},
                 "note": "소스별 상위 k. 전역 상위 k 는 짧은 댓글이 독점한다"}
 
+    # 처방·등록 데이터를 담론보다 먼저 보여줄 소스 순서. `bm25_terms()` 가 쓴다
+    PRIORITY = ["formula_full", "formula_summary", "ingredient", "mfds",
+                "youtube_video", "commerce_review", "youtube_comment"]
+
+    def bm25_terms(self, terms: list[str], k: int = 8) -> dict:
+        """**정확 신호(성분명·브랜드·등록번호)만으로** 소스별 검색 후 우선순위로 합친다.
+
+        `bm25_search(원문 질의)` 를 그대로 쓰면 안 된다. 실측으로 확인했다 —
+        `판테놀 함유` 전역 검색 상위 8건이 **전부 youtube_comment** 였다. 댓글이
+        252,332건으로 코퍼스의 92%라 `판테놀`·`함유` 같은 흔한 낱말이 섞이면
+        댓글 tf·문서수가 점수를 밀어 올린다(수호님이 같은 현상을 다른 예시로 찾았다 —
+        `formula_full` 이 커머스 리뷰에 밀리는 것).
+
+        고치는 법은 전역 점수를 조정하는 게 아니라 **소스별로 나눠 뽑고 우선순위로
+        합치는 것**이다 — `--per-source` 와 같은 원리다. 질의도 원문 문장이 아니라
+        매칭된 낱말만 쓴다. `쓰는`·`들어간` 같은 서술어가 섞이면 순위가 흔들린다.
+        """
+        query = " ".join(terms)
+        found = self.bm25.by_source(self.index, self.origin, query, k)
+        # **소스별 상한을 건다.** 순차로 채우면 `formula_full` 이 k칸을 다 먹고
+        # `ingredient`(성분 요약)·`mfds`(등록원부)가 밀린다 — 실측으로 확인했다.
+        # 한 소스가 다 먹으면 "여러 소스를 나란히 놓는다" 는 설계가 무의미해진다
+        quota = max(1, k // 3)
+        merged, seen = [], set()
+        for rounds in (quota, k):          # 1차: 소스별 상한. 2차: 남은 자리 채우기
+            for src in self.PRIORITY:
+                for d, sc in found.get(src, [])[:rounds]:
+                    if d not in seen and len(merged) < k:
+                        seen.add(d)
+                        merged.append(self._hit(d, sc))
+        # 우선순위 목록에 없는 소스가 있으면 마지막에 붙인다 (누락 방지)
+        for src, hits in found.items():
+            if src in self.PRIORITY:
+                continue
+            for d, sc in hits:
+                if d not in seen and len(merged) < k:
+                    seen.add(d)
+                    merged.append(self._hit(d, sc))
+        return {"kind": "bm25_priority", "gated": False, "hits": merged[:k],
+                "note": "처방·등록 데이터를 담론보다 먼저 보여준다. 원문 질의가 아니라 "
+                       "매칭된 낱말로만 검색했다"}
+
     def vector_search(self, query: str, k: int = 8) -> dict:
         """**`gated` 와 `unavailable` 을 섞지 않는다.**
 
@@ -155,7 +197,9 @@ class Engine:
             out["note"] = ("최근 N일에 등록된 목록이다. **트렌드 상승이 아니다.** "
                            "품목명 문자열 포함 여부만 본 얕은 매칭이다")
         elif d.route == "bm25":
-            r = self.bm25_search(query, k)
+            terms = d.ingredients + d.brands + d.reg_no + d.spf
+            # 정확 신호가 없으면(이론상 안 오지만) 원문으로 폴백한다
+            r = self.bm25_terms(terms, k) if terms else self.bm25_search(query, k)
             out["evidence"] = r["hits"]
             out["note"] = r["note"]
         elif d.route == "multi_source":
