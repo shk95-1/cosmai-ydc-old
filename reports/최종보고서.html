@@ -1,0 +1,638 @@
+<title>수요와 처방의 격차</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+:root{
+  --ground:#FCFCFB; --raised:#FFFFFF; --sunken:#F4F2F8;
+  --ink:#1A1720; --ink2:#453F54; --muted:#6B6577; --faint:#948EA3;
+  --line:#E6E2EE; --line2:#D3CDE2;
+  --s1:#5B3FD6; --s2:#C2410C; --s3:#0284A8;
+  --ok:#0F6E52; --hold:#8A5A0F; --pull:#8C2F2F;
+  --okbg:#E8F4EF; --holdbg:#FAF1DF; --pullbg:#FAEBEB;
+  --sans:'IBM Plex Sans KR','Malgun Gothic',system-ui,sans-serif;
+  --mono:'IBM Plex Mono','Consolas',monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#141318; --raised:#1C1A23; --sunken:#221F2C;
+    --ink:#EDEBF2; --ink2:#C6C1D2; --muted:#A29CB0; --faint:#7C7689;
+    --line:#2C2836; --line2:#3B3549;
+    --s1:#8E78F0; --s2:#CE6A2E; --s3:#1A93BC;
+    --ok:#4FBF9A; --hold:#D9A94E; --pull:#E08585;
+    --okbg:#16302A; --holdbg:#302719; --pullbg:#2E1D1D;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#141318; --raised:#1C1A23; --sunken:#221F2C;
+  --ink:#EDEBF2; --ink2:#C6C1D2; --muted:#A29CB0; --faint:#7C7689;
+  --line:#2C2836; --line2:#3B3549;
+  --s1:#8E78F0; --s2:#CE6A2E; --s3:#1A93BC;
+  --ok:#4FBF9A; --hold:#D9A94E; --pull:#E08585;
+  --okbg:#16302A; --holdbg:#302719; --pullbg:#2E1D1D;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--sans); font-weight:400; font-size:16px; line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:820px; margin:0 auto; padding:0 24px 96px}
+
+/* ── 표제 ── */
+header{padding:72px 0 40px; border-bottom:1px solid var(--line)}
+.eyebrow{
+  font-family:var(--mono); font-size:11.5px; font-weight:500;
+  letter-spacing:.16em; text-transform:uppercase; color:var(--s1); margin:0 0 18px;
+}
+h1{
+  font-size:clamp(34px,6vw,52px); font-weight:700; line-height:1.14;
+  letter-spacing:-.022em; margin:0 0 20px; text-wrap:balance;
+}
+.dek{font-size:18.5px; line-height:1.66; color:var(--ink2); margin:0 0 28px; max-width:60ch}
+.meta{
+  display:flex; flex-wrap:wrap; gap:6px 22px;
+  font-family:var(--mono); font-size:12.5px; color:var(--muted);
+}
+.meta b{color:var(--ink2); font-weight:500}
+
+/* ── 섹션 ── */
+section{padding-top:56px}
+h2{
+  font-size:25px; font-weight:600; letter-spacing:-.016em; line-height:1.3;
+  margin:0 0 6px; text-wrap:balance;
+  display:flex; align-items:baseline; gap:14px;
+}
+h2 .n{
+  font-family:var(--mono); font-size:13px; font-weight:500; color:var(--s1);
+  flex:none; padding-top:2px;
+}
+.sub{color:var(--muted); font-size:14.5px; margin:0 0 26px; padding-left:31px}
+h3{font-size:17px; font-weight:600; letter-spacing:-.01em; margin:34px 0 10px}
+p{margin:0 0 15px; max-width:68ch}
+a{color:var(--s1)}
+strong{font-weight:600}
+code,.mono{font-family:var(--mono); font-size:.9em}
+em{font-style:normal; color:var(--muted)}
+
+/* ── 요약 타일 ── */
+.tiles{display:grid; grid-template-columns:repeat(auto-fit,minmax(148px,1fr)); gap:1px; background:var(--line); border:1px solid var(--line); border-radius:10px; overflow:hidden; margin:0 0 34px}
+.tile{background:var(--raised); padding:18px 18px 16px}
+.tile .v{font-family:var(--mono); font-size:29px; font-weight:600; letter-spacing:-.03em; line-height:1.1; color:var(--ink); font-variant-numeric:tabular-nums}
+.tile .v small{font-size:15px; font-weight:500; color:var(--muted); letter-spacing:0}
+.tile .k{font-size:12.5px; color:var(--muted); margin-top:5px; line-height:1.45}
+
+/* ── 핵심 요약 박스 ── */
+.brief{background:var(--sunken); border:1px solid var(--line); border-radius:12px; padding:26px 28px; margin:0 0 32px}
+.brief ol{margin:0; padding-left:22px}
+.brief li{margin-bottom:13px; color:var(--ink2)}
+.brief li:last-child{margin-bottom:0}
+.brief li b{color:var(--ink)}
+
+/* ── 차트 ── */
+figure{margin:26px 0 30px; background:var(--raised); border:1px solid var(--line); border-radius:12px; padding:22px 24px 18px; overflow-x:auto}
+figcaption{font-size:13.5px; color:var(--muted); line-height:1.6; margin-top:14px; padding-top:13px; border-top:1px solid var(--line)}
+figcaption b{color:var(--ink2); font-weight:500}
+.ftitle{font-size:15px; font-weight:600; letter-spacing:-.008em; margin:0 0 3px}
+.fnote{font-family:var(--mono); font-size:11.5px; color:var(--faint); margin:0 0 16px}
+svg{display:block; max-width:100%; overflow:visible}
+svg text{font-family:var(--sans); fill:var(--ink2)}
+svg text.lab{font-size:12.5px}
+svg text.val{font-family:var(--mono); font-size:12px; font-weight:500; fill:var(--ink)}
+svg text.ax{font-family:var(--mono); font-size:10.5px; fill:var(--faint)}
+svg .grid{stroke:var(--line); stroke-width:1}
+.legend{display:flex; flex-wrap:wrap; gap:7px 18px; margin:2px 0 15px; font-size:12.5px; color:var(--ink2)}
+.legend span{display:inline-flex; align-items:center; gap:7px}
+.legend i{width:11px; height:11px; border-radius:3px; flex:none}
+
+/* ── 표 ── */
+.tw{overflow-x:auto; margin:22px 0 26px; border:1px solid var(--line); border-radius:10px; background:var(--raised)}
+table{border-collapse:collapse; width:100%; font-size:14px; min-width:520px}
+th,td{padding:11px 15px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top}
+thead th{
+  font-family:var(--mono); font-size:11px; font-weight:600; letter-spacing:.07em;
+  text-transform:uppercase; color:var(--muted); background:var(--sunken); white-space:nowrap;
+}
+tbody tr:last-child td{border-bottom:none}
+td.num,th.num{text-align:right; font-family:var(--mono); font-variant-numeric:tabular-nums; white-space:nowrap}
+td b{font-weight:600}
+.pill{display:inline-block; font-family:var(--mono); font-size:10.5px; font-weight:600; letter-spacing:.05em; padding:2px 8px; border-radius:20px; white-space:nowrap}
+.p-ok{background:var(--okbg); color:var(--ok)}
+.p-hold{background:var(--holdbg); color:var(--hold)}
+.p-pull{background:var(--pullbg); color:var(--pull)}
+
+/* ── 카드 ── */
+.cards{display:grid; gap:14px; margin:24px 0 28px}
+.card{background:var(--raised); border:1px solid var(--line); border-radius:12px; padding:20px 22px}
+.card .ch{display:flex; align-items:baseline; justify-content:space-between; gap:14px; flex-wrap:wrap; margin-bottom:9px}
+.card .cn{font-size:17px; font-weight:600; letter-spacing:-.01em}
+.card .cb{font-family:var(--mono); font-size:12px; color:var(--muted); margin:0 0 12px; font-variant-numeric:tabular-nums}
+.card .cu{font-size:14.5px; color:var(--ink2); margin:0}
+.card .cu b{color:var(--ink)}
+
+/* ── 인용/경고 ── */
+blockquote{
+  margin:24px 0; padding:16px 22px; background:var(--sunken);
+  border-left:3px solid var(--s1); border-radius:0 8px 8px 0;
+  font-size:15px; color:var(--ink2);
+}
+blockquote p{margin:0; max-width:none}
+blockquote p+p{margin-top:10px}
+.warn{border-left-color:var(--pull)}
+.warn strong{color:var(--pull)}
+
+ul.tight{margin:0 0 16px; padding-left:22px}
+ul.tight li{margin-bottom:8px; color:var(--ink2); max-width:66ch}
+ul.tight li b{color:var(--ink)}
+
+footer{margin-top:64px; padding-top:26px; border-top:1px solid var(--line); font-size:13px; color:var(--faint)}
+footer p{max-width:68ch}
+@media (max-width:560px){
+  header{padding-top:48px}
+  .wrap{padding:0 18px 64px}
+  figure{padding:18px 16px 14px}
+}
+</style>
+
+<div class="wrap">
+
+<header>
+  <p class="eyebrow">COSMAI · 선케어 데이터 PoC 결과 보고</p>
+  <h1>수요와 처방의 격차</h1>
+  <p class="dek">
+    소비자가 검색하고 말하는 것, 제품이 실제로 담고 있는 것, 리뷰에 남는 것 —
+    이 셋을 같은 기준으로 놓고 재었습니다. 세 축이 어긋나는 자리가
+    기회이고, 이 보고서는 그 자리를 여섯 개로 좁힙니다.
+  </p>
+  <div class="meta">
+    <span><b>기간</b> 2026.08.14 – 08.27 (2주)</span>
+    <span><b>팀</b> COSMAI · 4인</span>
+    <span><b>작성</b> 김시현</span>
+  </div>
+</header>
+
+<!-- ═══════════ 1. 한 장 요약 ═══════════ -->
+<section id="s1">
+  <h2><span class="n">01</span>한 장 요약</h2>
+  <p class="sub">아래 네 문장이 이 보고서의 전부입니다.</p>
+
+  <div class="tiles">
+    <div class="tile"><div class="v">306,178</div><div class="k">검색 가능한 문서 조각<br>(유튜브·커머스·성분·식약처)</div></div>
+    <div class="tile"><div class="v">6<small>장</small></div><div class="k">근거가 붙은<br>Opportunity Card</div></div>
+    <div class="tile"><div class="v">48.2<small>%</small></div><div class="k">광고·협찬 영상 비율<br>(신고 필드는 26.3%만 표시)</div></div>
+    <div class="tile"><div class="v">3<small>개</small></div><div class="k">측정으로 철회한<br>우리 자신의 결론</div></div>
+  </div>
+
+  <div class="brief">
+    <ol>
+      <li><b>파는 곳과 말하는 곳이 다릅니다.</b> 「백탁」은 영상 설명에서 0.31%,
+      댓글에서 2.56%, 커머스 리뷰에서 12.09% 언급됩니다. 마케팅이 다루지 않는
+      불만이 구매 후 리뷰에 쌓입니다.</li>
+      <li><b>검색이 뜨는 성분이 처방에 들어와 있지 않습니다.</b> 엑소좀은 검색이
+      52배 늘었지만 선케어 577제품 중 1개에만 들어 있고, 배합순위는 136위입니다.
+      레티날·PDRN·트라넥삼산은 처방 0제품입니다.</li>
+      <li><b>영상 데이터는 절반이 광고입니다.</b> 964편 중 465편(48.2%)이
+      광고·협찬이고, 플랫폼 신고 필드만 보면 254편만 잡힙니다. 광고를 빼면
+      판정 64칸 중 19칸이 뒤집힙니다.</li>
+      <li><b>이 지표는 서술 도구이고 예측 도구가 아닙니다.</b> 후향 검증에서
+      적중률 27%·64%가 나왔고 기저율이 47%였습니다. "뜰 것이다"가 아니라
+      "지금 이런 비대칭이 있다"로 씁니다.</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ═══════════ 2. 무엇을 만들었나 ═══════════ -->
+<section id="s2">
+  <h2><span class="n">02</span>무엇을 만들었나</h2>
+  <p class="sub">수집부터 질의까지 한 줄로 이어집니다. 각 단계는 스크립트 하나로 재현됩니다.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th>단계</th><th>내용</th><th class="num">규모</th><th>상태</th></tr></thead>
+    <tbody>
+      <tr><td><b>수집</b></td><td>유튜브 선크림 장문 영상 + 댓글</td><td class="num">964편 · 60,311건</td><td><span class="pill p-ok">완료</span></td></tr>
+      <tr><td><b>수집</b></td><td>커머스 리뷰·랭킹 <em>(석현)</em></td><td class="num">18,476 조각</td><td><span class="pill p-ok">완료</span></td></tr>
+      <tr><td><b>수집</b></td><td>NAVER 검색 트렌드 <em>(현준)</em></td><td class="num">128개월</td><td><span class="pill p-ok">완료</span></td></tr>
+      <tr><td><b>수집</b></td><td>성분표·식약처 매핑 <em>(수호)</em></td><td class="num">31,246행 · 577제품</td><td><span class="pill p-ok">완료</span></td></tr>
+      <tr><td><b>지표</b></td><td>13주제 × 13분기 × 2소스 구성비·판정</td><td class="num">338행 · 64칸</td><td><span class="pill p-ok">완료</span></td></tr>
+      <tr><td><b>검색</b></td><td>BM25 (형태소 + 성분 사전 1,877종)</td><td class="num">306,178 조각</td><td><span class="pill p-ok">완료</span></td></tr>
+      <tr><td><b>검색</b></td><td>e5-base 벡터 (GPU 인코딩)</td><td class="num">306,178 · 913MB</td><td><span class="pill p-ok">완료</span></td></tr>
+      <tr><td><b>산출</b></td><td>Opportunity Card 자동 생성</td><td class="num">6장</td><td><span class="pill p-ok">완료</span></td></tr>
+      <tr><td><b>산출</b></td><td>RAG 질의 GUI + LLM 답변</td><td class="num">4개 탭</td><td><span class="pill p-ok">완료</span></td></tr>
+      <tr><td><b>보류</b></td><td>논문(PubMed) 축</td><td class="num">3,144행</td><td><span class="pill p-pull">철회</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <p>
+    가장 큰 자산은 데이터가 아니라 <strong>같은 질문을 네 소스에 똑같이 던질 수
+    있는 상태</strong>입니다. 「백탁」을 검색 트렌드·영상 설명·댓글·리뷰·성분표에
+    같은 정의로 물어볼 수 있고, 답이 어긋나면 그게 발견이 됩니다.
+  </p>
+</section>
+
+<!-- ═══════════ 3. 발견 ═══════════ -->
+<section id="s3">
+  <h2><span class="n">03</span>세 가지 발견</h2>
+  <p class="sub">각 발견은 두 개 이상의 소스가 어긋나는 자리에서 나왔습니다.</p>
+
+  <h3>3.1 마케팅이 말하지 않는 불만이 리뷰에 쌓입니다</h3>
+  <p>
+    「백탁」(하얗게 뜨는 현상)은 NAVER 검색량 1위 주제인데, 영상 설명란에서는
+    거의 언급되지 않습니다. 구매 후 리뷰에서는 <strong>영상의 39배</strong>로
+    나타납니다.
+  </p>
+
+  <figure>
+    <div class="ftitle">「백탁」 언급 구성비 — 소스별</div>
+    <p class="fnote">source_composition.py · 같은 기준·같은 분모</p>
+    <div id="c1"></div>
+    <figcaption>
+      <b>읽는 법</b> 영상 설명은 판매자가 쓰고, 댓글과 리뷰는 소비자가 씁니다.
+      영상이 다루지 않는 주제가 리뷰에 몰려 있다면 그건 제품이 해결하지 못한
+      문제입니다. <b>한계</b> 소스별 문서 길이와 작성 동기가 달라 절대치는
+      비교하지 않고, 세 소스의 <em>순서</em>만 읽습니다.
+    </figcaption>
+  </figure>
+
+  <p>
+    같은 패턴이 「혼합자차」에서 더 크게 나타납니다. 제품 쪽 비중은 32.9%인데
+    소비자 댓글에서는 1.21% — <strong>27.1배</strong> 차이입니다. 업계가 쓰는
+    말이 소비자에게 전달되지 않고 있습니다.
+  </p>
+
+  <figure>
+    <div class="ftitle">「혼합자차」 — 제품이 쓰는 말 vs 소비자가 쓰는 말</div>
+    <p class="fnote">cross_source.py · 표현 공백 카드의 근거</p>
+    <div id="c2"></div>
+    <figcaption>
+      <b>읽는 법</b> 제품 설명에는 있고 소비자 언어에는 없는 용어입니다.
+      제품 자체의 수요 문제가 아니라 <em>전달의 문제</em>로 읽습니다.
+      <b>한계</b> 소비자가 다른 말로 부르고 있을 가능성을 배제하지 못했습니다.
+    </figcaption>
+  </figure>
+
+  <h3>3.2 검색이 뜨는 성분이 아직 처방에 없습니다</h3>
+  <p>
+    NAVER 검색 증가율과 실제 선케어 577제품의 채택률을 나란히 놓았습니다.
+    두 값의 단위가 다르므로 <strong>축을 합치지 않고 따로 그렸습니다.</strong>
+  </p>
+
+  <figure>
+    <div class="ftitle">성분 10종 — 검색 증가 / 처방 채택 / 고함량</div>
+    <p class="fnote">cross_source_ingredient.csv · 검색은 기준_세럼 대비 배수, 채택은 577제품 대비</p>
+    <div id="c3"></div>
+    <figcaption>
+      <b>읽는 법</b> 왼쪽이 길고 가운데가 짧으면 <em>수요는 왔는데 처방이 없다</em>
+      — 신제품 후보입니다. 가운데는 길고 오른쪽이 짧으면 <em>널리 쓰지만 얕게 쓴다</em>
+      — 함량 차별화 후보입니다. <b>한계</b> 검색 배수는 NAVER 그룹 간 상대값이며,
+      기준선 그룹이 없어 절대 추세로는 읽을 수 없습니다(현준 지적).
+      채택률은 선케어 카테고리 한정입니다.
+    </figcaption>
+  </figure>
+
+  <h3>3.3 영상 데이터의 절반이 광고입니다</h3>
+  <p>
+    광고·협찬 영상을 그냥 두면 "소비자가 말하는 것"이 아니라 "브랜드가 말하게 한
+    것"을 측정하게 됩니다. 플랫폼 신고 필드만 믿으면 절반을 놓칩니다.
+  </p>
+
+  <figure>
+    <div class="ftitle">광고·협찬 영상 탐지 — 신고 필드 vs 본문 규칙</div>
+    <p class="fnote">spam_ad_flags.py · 전체 964편</p>
+    <div id="c4"></div>
+    <figcaption>
+      <b>읽는 법</b> 신고 필드만 쓰면 254편(26.3%)만 광고로 잡히고, 설명란·자막의
+      협찬 표현까지 보면 465편(48.2%)입니다. <b>대응</b> 광고를 제외하면 판정 64칸
+      중 19칸이 뒤집혀서, 지우지 않고 <em>필터 민감 표시</em>를 붙였습니다 —
+      어느 결론이 광고 처리에 흔들리는지 카드마다 보입니다.
+    </figcaption>
+  </figure>
+</section>
+
+<!-- ═══════════ 4. 카드 ═══════════ -->
+<section id="s4">
+  <h2><span class="n">04</span>Opportunity Card 6장과 활용법</h2>
+  <p class="sub">각 카드는 어떤 소스가 어긋났는지, 무엇을 못 봤는지를 함께 싣습니다.</p>
+
+  <div class="cards" id="cards"></div>
+
+  <blockquote>
+    <p><strong>카드를 쓰는 순서</strong> — 카드는 결정이 아니라 <em>확인해야 할
+    가설</em>입니다.</p>
+    <p>① 카드의 <b>근거 문서를 직접 읽습니다</b>(GUI 질의 탭에서 카드 이름을
+    치면 원문이 나옵니다). ② 카드에 적힌 <b>한계가 우리 의사결정에 치명적인지</b>
+    봅니다. ③ 치명적이면 그 한계를 없앨 추가 데이터를 정하고, 아니면 소규모로
+    시험합니다.</p>
+  </blockquote>
+</section>
+
+<!-- ═══════════ 5. 신뢰도 ═══════════ -->
+<section id="s5">
+  <h2><span class="n">05</span>이 숫자를 믿어도 되는 근거</h2>
+  <p class="sub">2주 동안 파이프라인이 조용히 틀린 답을 만든 사례를 8번 잡았습니다.</p>
+
+  <p>
+    가장 위험한 실패는 오류가 나는 실패가 아니라 <strong>그럴듯한 값이 나오는
+    실패</strong>입니다. 8건 모두 예외도 경고도 없이 통과했고, 결과가 말이
+    됐습니다. 그래서 검사를 코드에 박았습니다.
+  </p>
+
+  <div class="tw"><table>
+    <thead><tr><th>무엇이 관측값이 됐나</th><th>어떻게 잡았나</th><th>지금 막는 장치</th></tr></thead>
+    <tbody>
+      <tr><td>채널당 수집 상한 10</td><td>월별 집계가 매달 10건 근처</td><td>재수집 + 쿼터 산식</td></tr>
+      <tr><td>정렬 없는 offset 페이징</td><td>외부 재현 실패 제기</td><td><code>reproduce.py</code></td></tr>
+      <tr><td>색인의 92%가 짧은 댓글</td><td>소스별로 나눠 질의</td><td>소스별 쿼터 검색</td></tr>
+      <tr><td>정답은 doc_id, 결과는 chunk_id</td><td>점수가 항상 0.000</td><td>계약 검증기 11종</td></tr>
+      <tr><td>정규화 전 본문으로 인코딩된 벡터</td><td>프로브 코사인 0.9986</td><td>텍스트 지문 대조</td></tr>
+      <tr><td>경고를 축 전체가 아니라 한 행에만 적용</td><td>잔존율 재측정</td><td>논문 축 전체 철회</td></tr>
+      <tr><td>두 글자 별칭이 다른 성분에 걸림 <em>(시카 → 실리콘)</em></td><td><code>--audit</code> 추가</td><td>별칭 사전 수정</td></tr>
+      <tr><td>원인을 잘못된 기준선에 귀속</td><td>옛 벡터를 되살려 직접 비교</td><td>기준선 명시</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>
+    특히 <strong>세 개는 우리 자신의 결론을 철회한 건</strong>입니다.
+    논문 축(분모·분자의 모집단이 달랐음), 시카 채택률 41.1%(실제로는 실리콘 분산제를
+    센 값), 벡터 성능 하락의 원인 귀속 — 발표 자료에 이미 들어가 있던 숫자들을
+    직접 내렸습니다.
+  </p>
+
+  <h3>검색 성능은 측정된 값만 씁니다</h3>
+  <figure>
+    <div class="ftitle">검색 정확도 P@10 — 엔진 × 질의 유형</div>
+    <p class="fnote">retrieval_eval.py · 60질의 · literal은 글자가 겹치는 질의, heldout은 안 겹치는 질의</p>
+    <div id="c5"></div>
+    <figcaption>
+      <b>읽는 법</b> 이름·SPF·브랜드처럼 정확 일치가 정답인 질의는 BM25가
+      확실히 낫습니다(0.841). 글자가 하나도 겹치지 않는 질의는 BM25가 0이고
+      벡터만 0.038 — <b>열 번 물어 여덟 번은 못 찾습니다.</b> 채택 기준("0을
+      넘느냐")은 통과했지만 "벡터가 잘 된다"는 뜻이 아닙니다.
+      <b>대응</b> 합치지 않고 용도별로 갈라 씁니다. 하이브리드(RRF)는 양쪽을
+      깎아서 쓰지 않습니다.
+    </figcaption>
+  </figure>
+</section>
+
+<!-- ═══════════ 6. 못 한 것 ═══════════ -->
+<section id="s6">
+  <h2><span class="n">06</span>못 한 것과 이유</h2>
+  <p class="sub">숨기면 다음 사람이 같은 곳에서 넘어집니다.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th>무엇</th><th>왜</th><th>상태</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><b>논문 축</b></td>
+        <td>검색어가 화장품을 세지 않습니다. 「엑소좀」 결과 중 피부 관련은
+        20.6%뿐이고, 그 20.6%도 피부암·건선·조직공학을 포함합니다. 보정 배수는
+        분모와 분자의 모집단이 달라 전부 못 씁니다.</td>
+        <td><span class="pill p-pull">철회</span><br><em>스위치 하나로 복구 가능</em></td>
+      </tr>
+      <tr>
+        <td><b>NAVER 절대 추세</b></td>
+        <td>선케어 요청에 기준선 그룹이 없어 그룹 간 상대 비교만 됩니다.
+        "검색이 늘었다"를 절대값으로 읽을 수 없습니다.</td>
+        <td><span class="pill p-hold">보류</span></td>
+      </tr>
+      <tr>
+        <td><b>예측</b></td>
+        <td>후향 검증 적중률 27%·64%에 기저율이 47%였습니다. 기저율을 병기하지
+        않은 검증은 검증이 아니라 홍보입니다.</td>
+        <td><span class="pill p-pull">범위 밖</span></td>
+      </tr>
+      <tr>
+        <td><b>매출·가격 연동</b></td>
+        <td>데이터가 없습니다. RAG가 이 질문을 받으면 답을 만들지 않고
+        거부합니다.</td>
+        <td><span class="pill p-hold">데이터 필요</span></td>
+      </tr>
+      <tr>
+        <td><b>자막 미사용</b></td>
+        <td>표본 45편 검사 결과, 설명란만 보면 3편이 걸리는 주제가 자막까지
+        보면 38편입니다. 현재 판정은 설명란만 씁니다.</td>
+        <td><span class="pill p-hold">개선 여지</span></td>
+      </tr>
+    </tbody>
+  </table></div>
+
+  <blockquote class="warn">
+    <p><strong>발표에서 하지 말 것</strong> — "벡터 검색이 작동합니다",
+    "논문이 이 성분을 뒷받침합니다", "이 성분이 뜰 것입니다".
+    세 문장 모두 우리 측정이 지지하지 않습니다.</p>
+  </blockquote>
+</section>
+
+<!-- ═══════════ 7. 다음 ═══════════ -->
+<section id="s7">
+  <h2><span class="n">07</span>실전 적용에 필요한 것</h2>
+  <p class="sub">PoC를 운영으로 옮길 때 순서대로 필요한 것들입니다.</p>
+
+  <ul class="tight">
+    <li><b>기준선 데이터 두 개.</b> NAVER 요청에 「선크림」 같은 기준 그룹을
+    넣고, 성분 축에 선케어 밖 카테고리(세럼·크림)를 추가하면 지금 "상대 비교만
+    가능"한 값이 절대 추세가 됩니다. 추가 수집 비용이 가장 적으면서 얻는 것이
+    가장 큽니다.</li>
+    <li><b>매출·가격 한 열.</b> 지금 카드는 "이런 비대칭이 있다"까지만 말합니다.
+    제품별 매출이나 가격대가 붙으면 "그래서 얼마짜리 기회인가"를 말할 수
+    있습니다.</li>
+    <li><b>논문 축을 살릴지 결정.</b> 화장품 한정 검색어를 다시 설계하면
+    <code>PAPER_HOLD = False</code> 한 줄로 복구됩니다. 다시 켜기 전에
+    잔존율을 재측정해야 합니다.</li>
+    <li><b>자막을 판정에 포함.</b> 표본 검사로 누락 규모(3편 → 38편)를 이미
+    확인했습니다. 파이프라인 변경이지 새 수집이 아닙니다.</li>
+    <li><b>LLM 앱을 하나로.</b> 팀에 앱이 둘 있고, 한쪽이 보던 행 수가
+    서버의 절반이었습니다(80,102 vs 173,007). 같은 질문에 다른 숫자가 나오면
+    대외적으로 문제가 됩니다.</li>
+  </ul>
+
+  <p>
+    <strong>지금 상태로도 쓸 수 있는 것</strong>은 GUI 질의 도구입니다.
+    선케어 관련 질문을 자연어로 던지면 근거 문서와 함께 답이 나오고,
+    데이터에 없는 질문은 답을 만들지 않고 거부합니다. 로컬에서 돌고 있으며
+    사내망(Tailscale)에 한정 공개하는 것도 가능합니다.
+  </p>
+</section>
+
+<footer>
+  <p>
+    모든 수치는 커밋된 산출물에서 재생성됩니다 —
+    <code>python reproduce.py</code> 가 338행·64칸과 τ·임계값을 대조합니다.
+    소스별 원본, 검증 스크립트, 철회 기록은 리포지토리
+    <code>reports/진행_총정리.md</code> 에 있습니다.
+  </p>
+</footer>
+
+</div>
+
+<script>
+(function(){
+  const NS='http://www.w3.org/2000/svg';
+  const S=['var(--s1)','var(--s2)','var(--s3)'];
+  const el=(n,a)=>{const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);return e;};
+  const fmt=v=>(Math.round(v*100)/100).toLocaleString('ko-KR');
+
+  /* 수평 막대 — 직접 라벨. 막대 끝은 4px 라운드, 베이스라인에 고정 */
+  function hbar(host,rows,opt){
+    opt=opt||{};
+    const labW=opt.labW||88, valW=opt.valW||66, rh=opt.rh||34, bh=opt.bh||13;
+    const W=Math.min(opt.w||700,700), plot=W-labW-valW;
+    const H=rows.length*rh+8;
+    const max=opt.max||Math.max(...rows.map(r=>r.v))||1;
+    const svg=el('svg',{viewBox:`0 0 ${W} ${H}`,width:W,height:H,role:'img'});
+    // 기준선
+    svg.appendChild(el('line',{x1:labW,y1:2,x2:labW,y2:H-6,class:'grid'}));
+    rows.forEach((r,i)=>{
+      const cy=i*rh+rh/2, w=Math.max(2,plot*r.v/max);
+      const t=el('text',{x:labW-11,y:cy+4,'text-anchor':'end',class:'lab'});
+      t.textContent=r.k; svg.appendChild(t);
+      svg.appendChild(el('rect',{x:labW,y:cy-bh/2,width:w,height:bh,rx:4,
+        fill:r.c||S[i%3]}));
+      const v=el('text',{x:labW+w+9,y:cy+4,class:'val'});
+      v.textContent=(opt.pre||'')+fmt(r.v)+(opt.unit||''); svg.appendChild(v);
+    });
+    host.appendChild(svg);
+  }
+
+  function legend(host,items){
+    const d=document.createElement('div'); d.className='legend';
+    items.forEach((it,i)=>{
+      const s=document.createElement('span');
+      const b=document.createElement('i'); b.style.background=it.c||S[i%3];
+      s.appendChild(b); s.appendChild(document.createTextNode(it.k)); d.appendChild(s);
+    });
+    host.appendChild(d);
+  }
+
+  /* ── 1. 백탁 3소스 ── */
+  const c1=document.getElementById('c1');
+  hbar(c1,[
+    {k:'영상 설명',v:0.31,c:S[0]},
+    {k:'유튜브 댓글',v:2.56,c:S[1]},
+    {k:'커머스 리뷰',v:12.09,c:S[2]},
+  ],{unit:'%',labW:92});
+
+  /* ── 2. 혼합자차 ── */
+  const c2=document.getElementById('c2');
+  hbar(c2,[
+    {k:'제품 설명',v:32.9,c:S[0]},
+    {k:'소비자 댓글',v:1.21,c:S[1]},
+  ],{unit:'%',labW:92});
+
+  /* ── 3. 성분 10종 — 소형 다중 (축을 합치지 않음) ── */
+  const ING=[
+    ['레티날',286.6,0.0,0.0],
+    ['엑소좀',52.2,0.2,0.0],
+    ['PDRN',44.9,0.0,0.0],
+    ['트라넥삼산',38.9,0.0,0.0],
+    ['나이아신아마이드',19.9,69.3,69.0],
+    ['판테놀',11.3,36.6,5.0],
+    ['시카·센텔라',4.8,35.0,0.0],
+    ['콜라겐',3.4,10.6,3.0],
+    ['히알루론산',2.2,60.0,0.0],
+    ['펩타이드',1.8,13.5,0.0],
+  ];
+  const c3=document.getElementById('c3');
+  legend(c3,[{k:'검색 증가 (배)'},{k:'처방 채택 (%)'},{k:'고함량 비율 (%)'}]);
+  (function(){
+    const labW=108, colW=150, gap=26, rh=27, bh=10;
+    const W=labW+colW*3+gap*2, H=ING.length*rh+30;
+    const svg=el('svg',{viewBox:`0 0 ${W} ${H}`,width:W,height:H,role:'img'});
+    const maxes=[286.6,69.3,69.0];
+    const heads=['검색 배수','채택률','고함량'];
+    for(let j=0;j<3;j++){
+      const x0=labW+j*(colW+gap);
+      const h=el('text',{x:x0,y:12,class:'ax'}); h.textContent=heads[j];
+      svg.appendChild(h);
+      svg.appendChild(el('line',{x1:x0,y1:18,x2:x0,y2:H-8,class:'grid'}));
+    }
+    ING.forEach((r,i)=>{
+      const cy=24+i*rh+rh/2;
+      const t=el('text',{x:labW-12,y:cy+4,'text-anchor':'end',class:'lab'});
+      t.textContent=r[0]; svg.appendChild(t);
+      for(let j=0;j<3;j++){
+        const x0=labW+j*(colW+gap), val=r[j+1];
+        const w=val<=0?0:Math.max(2,(colW-48)*val/maxes[j]);
+        if(w) svg.appendChild(el('rect',{x:x0,y:cy-bh/2,width:w,height:bh,rx:4,fill:S[j]}));
+        const v=el('text',{x:x0+w+7,y:cy+4,class:'val'});
+        v.textContent = val<=0 ? '없음' : fmt(val)+(j?'%':'배');
+        if(val<=0) v.setAttribute('fill','var(--faint)');
+        svg.appendChild(v);
+      }
+    });
+    c3.appendChild(svg);
+  })();
+
+  /* ── 4. 광고 탐지 ── */
+  const c4=document.getElementById('c4');
+  hbar(c4,[
+    {k:'전체 영상',v:964,c:'var(--line2)'},
+    {k:'본문 규칙',v:465,c:S[0]},
+    {k:'신고 필드',v:254,c:S[1]},
+  ],{unit:'편',labW:82,valW:78,max:964});
+
+  /* ── 5. 검색 성능 ── */
+  const c5=document.getElementById('c5');
+  legend(c5,[{k:'BM25 (어휘)'},{k:'벡터 (의미)'}]);
+  (function(){
+    const rows=[
+      ['literal — 글자가 겹치는 질의',0.841,0.541],
+      ['heldout — 글자가 안 겹치는 질의',0.000,0.038],
+    ];
+    const labW=210, plot=300, rh=30, bh=12;
+    const W=labW+plot+80, H=rows.length*(rh*2)+16;
+    const svg=el('svg',{viewBox:`0 0 ${W} ${H}`,width:W,height:H,role:'img'});
+    svg.appendChild(el('line',{x1:labW,y1:2,x2:labW,y2:H-8,class:'grid'}));
+    rows.forEach((r,i)=>{
+      const top=i*(rh*2)+8;
+      const t=el('text',{x:labW-12,y:top+rh-2,'text-anchor':'end',class:'lab'});
+      t.textContent=r[0]; svg.appendChild(t);
+      for(let j=0;j<2;j++){
+        const cy=top+8+j*(rh-8)+bh/2, val=r[j+1];
+        const w=val<=0?0:Math.max(2,plot*val/1.0);
+        if(w) svg.appendChild(el('rect',{x:labW,y:cy-bh/2,width:w,height:bh,rx:4,fill:S[j]}));
+        const v=el('text',{x:labW+w+9,y:cy+4,class:'val'});
+        v.textContent=val.toFixed(3);
+        if(val<=0) v.setAttribute('fill','var(--faint)');
+        svg.appendChild(v);
+      }
+    });
+    c5.appendChild(svg);
+  })();
+
+  /* ── 카드 6장 ── */
+  const CARDS=[
+    {n:'자극 · 눈시림', t:'제품 공백 기회', s:'68.1',
+     b:'댓글 구성비 12.39% vs 영상 설명 7.10% — 갭 +5.29%p · 근거 문서 다수',
+     u:'<b>제품 개발 브리프의 첫 줄로 씁니다.</b> 소비자가 영상보다 훨씬 많이 말하는 불만이므로, 무자극 처방을 소구점으로 삼을 근거가 됩니다. 다만 커머스 리뷰에서는 1.54%로 낮아 — 리뷰를 쓸 시점에는 언급이 줄어드는지 먼저 확인해야 합니다.'},
+    {n:'발림성', t:'검증된 성장', s:'67.9',
+     b:'댓글 5.43% · 영상 5.86% (갭 -0.43%p) · 커머스 리뷰 16.53% · 근거 121건',
+     u:'<b>기존 제품 리뉴얼의 우선순위로 씁니다.</b> 판매자와 소비자가 같은 정도로 말하는 유일한 주제 — 이미 합의된 축이라 새 시장이 아니라 경쟁 축입니다. 리뷰에서 16.53%로 가장 높으므로 여기서 밀리면 재구매가 깎입니다.'},
+    {n:'혼합자차', t:'표현 공백', s:'26.7',
+     b:'제품 32.9%(2위) vs 댓글 1.21%(3위) — 27.1배 차이',
+     u:'<b>마케팅 카피의 언어를 바꾸는 근거로 씁니다.</b> 제품 개발이 아니라 전달의 문제입니다. 「혼합자차」 대신 소비자가 실제로 쓰는 말을 찾아 카피를 다시 쓰거나, 이 용어를 교육할지 결정해야 합니다.'},
+    {n:'나이아신아마이드', t:'처방 기준선', s:null,
+     b:'채택 69.3%(400제품) · 배합순위 중앙 9위 · 고함량 69% · 검색 19.9배',
+     u:'<b>다른 성분 카드를 읽는 눈금자로 씁니다.</b> 채택·배합순위·고함량이 모두 높은 유일한 성분 — "이미 표준"의 모습입니다. 다른 성분이 이 셋 중 무엇이 빠져 있는지로 그 성분의 단계를 판단합니다. 논문 근거 없이 처방 데이터만으로 서는 카드입니다.'},
+    {n:'히알루론산', t:'함량 공백', s:null,
+     b:'채택 60.0%(346제품)인데 배합순위 중앙 46위 · 고함량 0% · 검색 2.2배',
+     u:'<b>함량 차별화의 후보로 씁니다.</b> 절반 이상 제품이 넣지만 배합순위 46위·고함량 0% — 널리 쓰지만 얕게 씁니다. 「고함량」을 실제 소구점으로 쓸 수 있는 자리입니다. 판테놀(37%·고함량 5%)·시카(35%·0%)도 같은 유형입니다.'},
+    {n:'레티날', t:'수요 선행 공백', s:null,
+     b:'검색 286.6배 · 선케어 처방 0.0%(0제품) · 배합순위 없음',
+     u:'<b>탐색 과제로만 씁니다 — 자동 채택하지 않습니다.</b> 검색 증가가 압도적인데 선케어에 0제품인 이유가 광민감성이라는 것은 도메인 지식이고 우리가 측정한 값이 아닙니다. 논문 근거는 철회했습니다. 엑소좀·PDRN·트라넥삼산도 같은 유형이며, 이 넷은 "왜 없는지"를 먼저 조사할 목록입니다.'},
+  ];
+  const host=document.getElementById('cards');
+  CARDS.forEach(c=>{
+    const d=document.createElement('div'); d.className='card';
+    const h=document.createElement('div'); h.className='ch';
+    const n=document.createElement('div'); n.className='cn'; n.textContent=c.n;
+    const p=document.createElement('span');
+    p.className='pill '+(c.t==='수요 선행 공백'?'p-hold':'p-ok');
+    p.textContent=c.t + (c.s?' · '+c.s:'');
+    h.appendChild(n); h.appendChild(p); d.appendChild(h);
+    const b=document.createElement('p'); b.className='cb'; b.textContent=c.b; d.appendChild(b);
+    const u=document.createElement('p'); u.className='cu'; u.innerHTML=c.u; d.appendChild(u);
+    host.appendChild(d);
+  });
+})();
+</script>
